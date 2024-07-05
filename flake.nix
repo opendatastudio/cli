@@ -17,6 +17,7 @@
       devShells.default = pkgs.mkShell {
         buildInputs = [
           pkgs.python311
+          pkgs.python311Packages.pip-tools
         ];
 
         shellHook = ''
