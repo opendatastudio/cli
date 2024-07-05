@@ -8,29 +8,37 @@ app = typer.Typer()
 
 @app.command()
 def run(
-    name: Annotated[
-        str, typer.Argument(help="Algorithm to run", show_default=False)
+    algorithm: Annotated[
+        str,
+        typer.Argument(
+            help="The name of the algorithm to run", show_default=False
+        ),
     ],
     container: Annotated[
         Optional[str],
-        typer.Argument(help="Container to run algorithm", show_default=False),
+        typer.Argument(
+            help="The name of the container to run in", show_default=False
+        ),
     ] = None,
-    argument_space: Annotated[
-        str, typer.Argument(help="Argument space to use for algorithm")
+    arguments: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="The name of the argument space to pass to the algorithm"
+        ),
     ] = "default",
 ):
-    """Some documentation here
+    """Run an algorithm
 
     By default, the run command executes the algorithm with the container
-    defined in the algorithm definition
+    defined in the algorithm definition and the default argument space
     """
-    print(f"Hello {name}, {argument_space}")
+    print(f"Hello {algorithm}, {container}, {arguments}")
 
 
 @app.command()
-def view(name: str):
-    """Some documentation here"""
-    print(f"Bye {name}!")
+def view(view: Annotated[str, typer.Argument(help="", show_default=False)]):
+    """Render a view locally"""
+    raise NotImplementedError("Not yet implemented")
 
 
 if __name__ == "__main__":
