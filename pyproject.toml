@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-opendata-cli = "opendata-cli.main:app"
+opendata-cli = "cli.main:app"
 
 [project.urls]
 "Homepage" = "https://github.com/opendatafit/cli"
