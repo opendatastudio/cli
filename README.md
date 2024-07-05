@@ -12,6 +12,8 @@ cd /path/to/datapackage
 
 Create a virtualenv and install the CLI via pip in local mode:
 ```
+python -m venv .venv
+source .venv/bin/activate
 pip install -e [/path/to/cli]
 ```
 
