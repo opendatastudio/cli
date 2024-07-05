@@ -20,6 +20,7 @@
           pkgs.python311
           pkgs.python311Packages.pip-tools
           pkgs.python311Packages.typer
+          pkgs.python311Packages.docker
         ];
 
         shellHook = ''
