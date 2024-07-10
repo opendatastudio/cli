@@ -7,6 +7,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 from typing import Optional
 from typing_extensions import Annotated
+from rich import print
+from rich.panel import Panel
 
 
 app = typer.Typer()
@@ -93,7 +95,7 @@ def view(
             container = json.load(f)["container"]
 
     # Execute view
-    print(f"Generating {view} view...")
+    print(f"[bold]=>[/bold] Generating [bold]{view}[/bold] view")
 
     container_log = client.containers.run(
         image=container,
@@ -103,11 +105,19 @@ def view(
         },
     )
 
-    print(container_log.decode("utf-8").strip())
+    print(
+        Panel(
+            container_log.decode("utf-8").strip(),
+            title="View container output",
+        )
+    )
 
-    print(f"Generated {view} view successfully")
+    print(f"[bold]=>[/bold] Successfully generated [bold]{view}[/bold] view")
 
-    print("Loading interactive view in web browser...")
+    print(
+        "[blue][bold]=>[/bold] Loading interactive view in web browser[/blue]"
+    )
+
     matplotlib.use("WebAgg")
 
     with open(f"{VIEWS_PATH}/{view}.p", "rb") as f:
