@@ -1,7 +1,10 @@
 import os
 import json
+import pickle
 import typer
 import docker
+import matplotlib
+import matplotlib.pyplot as plt
 from typing import Optional
 from typing_extensions import Annotated
 
@@ -19,6 +22,7 @@ RESOURCES_PATH = DATAPACKAGE_PATH + "/resources"
 METASCHEMAS_PATH = DATAPACKAGE_PATH + "/metaschemas"
 ALGORITHMS_PATH = DATAPACKAGE_PATH + "/algorithms"
 ARGUMENTS_PATH = DATAPACKAGE_PATH + "/arguments"
+VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
 @app.command()
@@ -67,9 +71,60 @@ def run(
 
 
 @app.command()
-def view(view: Annotated[str, typer.Argument(help="", show_default=False)]):
+def view(
+    view: Annotated[
+        str,
+        typer.Argument(
+            help="The name of the view to render", show_default=False
+        ),
+    ],
+    container: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="The name of the container to render the view in",
+            show_default=False,
+        ),
+    ] = None,
+):
     """Render a view locally"""
-    raise NotImplementedError("Not yet implemented")
+    if container is None:
+        # Use container defined in view
+        with open(f"{VIEWS_PATH}/{view}.json", "r") as f:
+            container = json.load(f)["container"]
+
+    # Execute view
+    print(f"Generating {view} view...")
+
+    container_log = client.containers.run(
+        image=container,
+        volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
+        environment={
+            "VIEW": view,
+        },
+    )
+
+    print(container_log.decode("utf-8").strip())
+
+    print(f"Generated {view} view successfully")
+
+    print("Loading interactive view in web browser...")
+    matplotlib.use("WebAgg")
+
+    with open(f"{VIEWS_PATH}/{view}.p", "rb") as f:
+        # NOTE: The matplotlib version in CLI must be >= the version of
+        # matplotlib used to generate the plot (which is chosen by the user)
+        # So the CLI should be kept up to date at all times
+
+        # Load matplotlib figure
+        pickle.load(f)
+
+    plt.show()
+
+
+@app.command()
+def reset():
+    # Remove all outputs from datapackage
+    pass
 
 
 if __name__ == "__main__":

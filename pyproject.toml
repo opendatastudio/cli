@@ -10,7 +10,10 @@ authors = [
 readme = "README.md"
 dependencies = [
     "typer >= 0.12, < 1",
-    "docker",
+    "docker >= 7.1.0, < 8",
+    "matplotlib >= 3.9.1, < 4",
+    "tornado",  # Required for rendering interactive plots
+    "opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit",
 ]
 
 [project.scripts]
