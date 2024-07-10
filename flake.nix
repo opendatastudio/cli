@@ -19,8 +19,8 @@
           pkgs.pre-commit
           pkgs.python311
           pkgs.python311Packages.pip-tools
-          pkgs.python311Packages.typer
-          pkgs.python311Packages.docker
+          # Workaround for library linking issue on NixOS
+          pkgs.python311Packages.matplotlib
         ];
 
         shellHook = ''
