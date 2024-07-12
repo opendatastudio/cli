@@ -89,10 +89,22 @@ def view(
     ] = None,
 ):
     """Render a view locally"""
+    # Load view json
+    with open(f"{VIEWS_PATH}/{view}.json", "r") as f:
+        view_json = json.load(f)
+
+    # Check required resources are populated
+    for resource in view_json["resources"]:
+        with open(f"{RESOURCES_PATH}/{resource}.json", "r") as f:
+            if not json.load(f)["data"]:
+                raise ValueError(
+                    f"""Can't render view with empty resource {resource}. \
+                        Have you executed the datapackage?"""
+                )
+
     if container is None:
         # Use container defined in view
-        with open(f"{VIEWS_PATH}/{view}.json", "r") as f:
-            container = json.load(f)["container"]
+        container = view_json["container"]
 
     # Execute view
     print(f"[bold]=>[/bold] Generating [bold]{view}[/bold] view")
