@@ -174,13 +174,6 @@ def load(
     ] = "default",
 ):
     """Load data into algorithm argument"""
-    # Load resource with metaschema
-    # THIS DEPENDS ON METASCHEMA??
-    # we should probably rethink this?
-    # do we specify an argument space here for ingestion as well?
-    # or do we need to move metaschemas to be independent of argument
-    # spaces? how do we deal with multiple allowed metaschemas?
-
     # Get name of resource and metaschema from specified argument
     with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
         argument_obj = find_by_name(json.load(f)["data"], argument)
