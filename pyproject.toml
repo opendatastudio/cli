@@ -13,7 +13,7 @@ dependencies = [
     "docker >= 7.1.0, < 8",
     "matplotlib >= 3.9.1, < 4",
     "tornado",  # Required for rendering interactive plots
-    "opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit",
+    "opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit@main",
 ]
 
 [project.scripts]

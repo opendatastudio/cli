@@ -33,7 +33,7 @@ numpy==2.0.0
     #   contourpy
     #   matplotlib
     #   pandas
-opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit
+opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit@main
     # via opendata-cli (pyproject.toml)
 packaging==24.1
     # via matplotlib
