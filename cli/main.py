@@ -6,7 +6,10 @@ import docker
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Optional
+import ntpath
+from pathlib import Path
+from ast import literal_eval
+from typing import Optional, Any
 from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
@@ -50,7 +53,7 @@ def run(
             help="The name of the container to run in", show_default=False
         ),
     ] = None,
-):
+) -> None:
     """Run an algorithm
 
     By default, the run command executes the algorithm with the container
@@ -90,7 +93,7 @@ def view(
             show_default=False,
         ),
     ] = None,
-):
+) -> None:
     """Render a view locally"""
     # Load view json
     with open(f"{VIEWS_PATH}/{view}.json", "r") as f:
@@ -169,27 +172,13 @@ def load(
         Optional[str],
         typer.Argument(
             help="Name of target argument space",
-            show_default=False,
+            show_default=True,
         ),
     ] = "default",
-):
+) -> None:
     """Load data into algorithm argument"""
-    # Get name of resource and metaschema from specified argument
-    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
-        argument_obj = find_by_name(json.load(f)["data"], argument)
-        resource = argument_obj["resource"]
-        metaschema = argument_obj["metaschema"]
-
-    # Load resource with metaschema
-    resource_path = f"{RESOURCES_PATH}/{resource}.json"
-    with open(resource_path, "r") as rf, open(
-        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
-    ) as mf:
-        resource_obj = json.load(rf)
-        resource_obj["metaschema"] = json.load(mf)["schema"]
-
-    # Load into Tabular Data object
-    print(f'[bold]=>[/bold] Loading "{resource}" resource')
+    # Load resource into TabularDataResource object
+    resource_obj = load_resource(algorithm, argument, argument_space)
     table = TabularDataResource(resource=resource_obj)
 
     # Read CSV into resource
@@ -197,23 +186,201 @@ def load(
     table.data = pd.read_csv(path)
 
     # Write to resource
-    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
-    updated_resource = table.to_dict()
-    updated_resource.pop("metaschema")  # Don't write metaschema
-    with open(resource_path, "w") as f:
-        json.dump(updated_resource, f, indent=2)
+    write_resource(table.to_dict())
 
     print("[bold]=>[/bold] Resource successfully loaded!")
 
 
 @app.command()
-def reset():
-    # Remove all run outputs from datapackage, reset to original state
+def set_param(
+    algorithm: Annotated[
+        str,
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ],
+    argument: Annotated[
+        str,
+        typer.Argument(
+            help="Name of parameter argument to populate",
+            show_default=False,
+        ),
+    ],
+    key: Annotated[
+        str,
+        typer.Argument(
+            help="Name of parameter to set",
+            show_default=False,
+        ),
+    ],
+    value: Annotated[
+        str,  # Workaround for union types not being supported by Typer yet
+        # Union[str, int, float, bool],
+        typer.Argument(
+            help="Value to set",
+            show_default=False,
+        ),
+    ],
+    argument_space: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Name of target argument space",
+            show_default=True,
+        ),
+    ] = "default",
+) -> None:
+    """Set a parameter value"""
+    # Parse value (workaround for Typer not supporting Union types :<)
+    value = dumb_str_to_type(value)
 
-    # Remove all data and schemas from resources
+    # Load param resource
+    resource = load_resource(algorithm, argument, argument_space)
+
+    # Check it's a param resource
+    if resource.get("type") != "parameters":
+        raise ValueError('Resource must be of type "parameters"')
+
+    # If data is not populated, populate with defaults from metaschema first
+    print(f'[bold]=>[/bold] Setting parameter "{key}" to value {value}')
+    if not resource["data"]:
+        resource["data"] = {
+            field["name"]: field.get("default", None)
+            for field in resource["metaschema"]["fields"]
+        }
+
+    # Set key/value
+    resource["data"][key] = value
+
+    # Write resource
+    write_resource(resource)
+
+    print(
+        (
+            f'[bold]=>[/bold] Successfully set parameter "{key}" value to '
+            f"{value} in parameter resource \"{resource['name']}\""
+        )
+    )
+
+
+def set_arg(
+    algorithm: Annotated[
+        str,
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ],
+    argument: Annotated[
+        str,
+        typer.Argument(
+            help="Name of argument to set",
+            show_default=False,
+        ),
+    ],
+    value: Annotated[
+        str,  # Workaround for union types not being supported by Typer yet
+        # Union[str, int, float, bool],
+        typer.Argument(
+            help="Value to set",
+            show_default=False,
+        ),
+    ],
+    argument_space: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Name of target argument space",
+            show_default=True,
+        ),
+    ] = "default",
+) -> None:
+    # TODO: Set arg (e.g. enum, etc.)
+    # (make sure to validate type and value if enum)
+    pass
+
+
+@app.command()
+def reset():
+    """Remove all run outputs from datapackage - reset to empty state"""
+    # Remove all data and schemas from tabular-data-resources
+    print("[bold]=>[/bold] Checking tabular data resources")
+    resource_pathlist = Path(RESOURCES_PATH).rglob("*.json")
+
+    for path in resource_pathlist:
+        with open(path, "r") as f:
+            resource_obj = json.load(f)
+
+        if resource_obj["profile"] == "tabular-data-resource":
+            if resource_obj.get("type") == "parameters":
+                # Don't overwrite external schema reference
+                # TODO: Do we just set the data to defaults here?
+                if resource_obj["data"]:
+                    print(f"  - Resetting parameters {resource_obj['name']}")
+                    resource_obj["data"] = []
+            else:
+                if resource_obj["data"] or resource_obj["schema"]:
+                    print(f"  - Resetting resource {resource_obj['name']}")
+                    resource_obj["data"] = []
+                    resource_obj["schema"] = {}
+
+            with open(path, "w") as f:
+                json.dump(resource_obj, f, indent=2)
 
     # Remove view render artefacts - .png, .p
-    pass
+    print("[bold]=>[/bold] Checking view artefacts")
+    for file in os.scandir(VIEWS_PATH):
+        if file.path.endswith(".png") or file.path.endswith(".p"):
+            print(f"  - Removed {ntpath.basename(file.path)}")
+            os.remove(file.path)
+
+    print("[bold]=>[/bold] Done!")
+
+
+def load_resource(
+    algorithm: str, argument: str, argument_space: str = "default"
+) -> dict:
+    """Load a resource object for a specified argument"""
+    print(f"[bold]=>[/bold] Finding resource for argument {argument}")
+    # Get name of resource and metaschema from specified argument
+    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
+        argument_obj = find_by_name(json.load(f)["data"], argument)
+        if argument_obj is None:
+            raise ValueError(
+                (
+                    f'Can\'t find argument named "{argument}" in argument '
+                    f'space "{argument_space}"'
+                )
+            )
+        resource = argument_obj["resource"]
+        metaschema = argument_obj["metaschema"]
+
+    # Load resource with metaschema
+    print(f'[bold]=>[/bold] Loading resource "{resource}"')
+    resource_path = f"{RESOURCES_PATH}/{resource}.json"
+    with open(resource_path, "r") as rf, open(
+        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
+    ) as mf:
+        resource_obj = json.load(rf)
+        resource_obj["metaschema"] = json.load(mf)["schema"]
+
+    return resource_obj
+
+
+def write_resource(resource: dict) -> None:
+    """Write updated resource to file"""
+    resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
+    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
+    resource.pop("metaschema")  # Don't write metaschema
+    with open(resource_path, "w") as f:
+        json.dump(resource, f, indent=2)
+
+
+def dumb_str_to_type(value) -> Any:
+    """Parse a string to any Python type"""
+    # Stupid workaround for Typer not supporting Union types :<
+    try:
+        return literal_eval(value)
+    except ValueError:
+        if value.lower() == "true":
+            return True
+        elif value.lower() == "false":
+            return False
+        else:
+            return value
 
 
 if __name__ == "__main__":
