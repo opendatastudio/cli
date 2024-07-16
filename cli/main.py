@@ -5,10 +5,13 @@ import typer
 import docker
 import matplotlib
 import matplotlib.pyplot as plt
+import pandas as pd
 from typing import Optional
 from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
+from opendatafit.resources import TabularDataResource
+from opendatafit.helpers import find_by_name
 
 
 app = typer.Typer()
@@ -144,8 +147,79 @@ def view(
 
 
 @app.command()
+def load(
+    algorithm: Annotated[
+        str,
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ],
+    argument: Annotated[
+        str,
+        typer.Argument(
+            help="Name of argument to populate",
+            show_default=False,
+        ),
+    ],
+    path: Annotated[
+        str,
+        typer.Argument(
+            help="Path to the data to ingest (xml, csv)", show_default=False
+        ),
+    ],
+    argument_space: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Name of target argument space",
+            show_default=False,
+        ),
+    ] = "default",
+):
+    """Load data into algorithm argument"""
+    # Load resource with metaschema
+    # THIS DEPENDS ON METASCHEMA??
+    # we should probably rethink this?
+    # do we specify an argument space here for ingestion as well?
+    # or do we need to move metaschemas to be independent of argument
+    # spaces? how do we deal with multiple allowed metaschemas?
+
+    # Get name of resource and metaschema from specified argument
+    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
+        argument_obj = find_by_name(json.load(f)["data"], argument)
+        resource = argument_obj["resource"]
+        metaschema = argument_obj["metaschema"]
+
+    # Load resource with metaschema
+    resource_path = f"{RESOURCES_PATH}/{resource}.json"
+    with open(resource_path, "r") as rf, open(
+        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
+    ) as mf:
+        resource_obj = json.load(rf)
+        resource_obj["metaschema"] = json.load(mf)["schema"]
+
+    # Load into Tabular Data object
+    print(f'[bold]=>[/bold] Loading "{resource}" resource')
+    table = TabularDataResource(resource=resource_obj)
+
+    # Read CSV into resource
+    print(f"[bold]=>[/bold] Reading {path}")
+    table.data = pd.read_csv(path)
+
+    # Write to resource
+    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
+    updated_resource = table.to_dict()
+    updated_resource.pop("metaschema")  # Don't write metaschema
+    with open(resource_path, "w") as f:
+        json.dump(updated_resource, f, indent=2)
+
+    print("[bold]=>[/bold] Resource successfully loaded!")
+
+
+@app.command()
 def reset():
-    # Remove all outputs from datapackage
+    # Remove all run outputs from datapackage, reset to original state
+
+    # Remove all data and schemas from resources
+
+    # Remove view render artefacts - .png, .p
     pass
 
 
