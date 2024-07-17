@@ -367,6 +367,14 @@ def load_resource(
         resource_obj = json.load(rf)
         resource_obj["metaschema"] = json.load(mf)["schema"]
 
+        # Load external schema
+        if resource_obj["schema"] == "metaschema":
+            # Copy metaschema to schema
+            resource_obj["schema"] = resource_obj["metaschema"]
+            # Label schema as metaschema copy so we don't overwrite it when
+            # writing back to resource
+            resource_obj["schema"]["type"] = "metaschema"
+
     return resource_obj
 
 
@@ -375,6 +383,8 @@ def write_resource(resource: dict) -> None:
     resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
     print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
     resource.pop("metaschema")  # Don't write metaschema
+    if resource["schema"].get("type") == "metaschema":
+        resource["schema"] = "metaschema"  # Don't write metaschema copy
     with open(resource_path, "w") as f:
         json.dump(resource, f, indent=2)
 
