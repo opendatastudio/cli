@@ -204,7 +204,7 @@ def set_param(
             show_default=False,
         ),
     ],
-    key: Annotated[
+    name: Annotated[
         str,
         typer.Argument(
             help="Name of parameter to set",
@@ -236,25 +236,35 @@ def set_param(
 
     # Check it's a param resource
     if resource.get("type") != "parameters":
-        raise ValueError('Resource must be of type "parameters"')
+        raise ValueError(
+            f"Resource \"{resource['name']}\" is not of type \"parameters\""
+        )
 
     # If data is not populated, populate with defaults from metaschema first
-    print(f'[bold]=>[/bold] Setting parameter "{key}" to value {value}')
+    print(f'[bold]=>[/bold] Setting parameter "{name}" to value {value}')
     if not resource["data"]:
-        resource["data"] = {
-            field["name"]: field.get("default", None)
-            for field in resource["metaschema"]["fields"]
-        }
+        resource["data"] = [
+            {
+                field["name"]: field.get("default", None)
+                for field in resource["metaschema"]["fields"]
+            }
+        ]
 
-    # Set key/value
-    resource["data"][key] = value
+    # Set parameter value (initial guess)
+    try:
+        find_by_name(resource["data"], name)["init"] = value
+    except TypeError:
+        raise ValueError(
+            f'Could not find parameter "{name}" in resource '
+            f"\"{resource['name']}\""
+        )
 
     # Write resource
     write_resource(resource)
 
     print(
         (
-            f'[bold]=>[/bold] Successfully set parameter "{key}" value to '
+            f'[bold]=>[/bold] Successfully set parameter "{name}" value to '
             f"{value} in parameter resource \"{resource['name']}\""
         )
     )
