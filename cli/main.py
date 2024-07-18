@@ -9,7 +9,7 @@ import pandas as pd
 import ntpath
 from pathlib import Path
 from ast import literal_eval
-from typing import Optional, Any
+from typing import Optional, Any, List, Dict
 from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
@@ -64,8 +64,14 @@ def run(
         with open(f"{ARGUMENTS_PATH}/{algorithm}.{arguments}.json", "r") as f:
             container = json.load(f)["container"]
 
-    # Execute algorithm
-    client.containers.run(
+    # Execute algorithm container and print any logs
+    print(
+        f"[bold]=>[/bold] Executing [bold]{algorithm}[/bold] with "
+        f"[bold]{arguments}[/bold] argument space in container "
+        f"[bold]{container}[/bold]"
+    )
+
+    run_container_and_print_logs(
         image=container,
         volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
         environment={
@@ -73,9 +79,10 @@ def run(
             "CONTAINER": container,
             "ARGUMENTS": arguments,
         },
+        panel_title="Algorithm container output",
     )
 
-    print(f"Executed {algorithm} algorithm successfully")
+    print(f"[bold]=>[/bold] Executed [bold]{algorithm}[/bold] successfully")
 
 
 @app.command()
@@ -115,19 +122,13 @@ def view(
     # Execute view
     print(f"[bold]=>[/bold] Generating [bold]{view}[/bold] view")
 
-    container_log = client.containers.run(
+    run_container_and_print_logs(
         image=container,
         volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
         environment={
             "VIEW": view,
         },
-    )
-
-    print(
-        Panel(
-            container_log.decode("utf-8").strip(),
-            title="View container output",
-        )
+        panel_title="View container output",
     )
 
     print(f"[bold]=>[/bold] Successfully generated [bold]{view}[/bold] view")
@@ -241,7 +242,10 @@ def set_param(
         )
 
     # If data is not populated, populate with defaults from metaschema first
-    print(f'[bold]=>[/bold] Setting parameter "{name}" to value {value}')
+    print(
+        f"[bold]=>[/bold] Setting parameter [bold]{name}[/bold] to value "
+        f"[bold]{value}[/bold]"
+    )
     if not resource["data"]:
         resource["data"] = [
             {
@@ -264,8 +268,9 @@ def set_param(
 
     print(
         (
-            f'[bold]=>[/bold] Successfully set parameter "{name}" value to '
-            f"{value} in parameter resource \"{resource['name']}\""
+            f"[bold]=>[/bold] Successfully set parameter [bold]{name}[/bold] "
+            f"value to [bold]{value}[/bold] in parameter resource "
+            f"[bold]{resource['name']}[/bold]"
         )
     )
 
@@ -300,7 +305,7 @@ def set_arg(
 ) -> None:
     # TODO: Set arg (e.g. enum, etc.)
     # (make sure to validate type and value if enum)
-    pass
+    raise NotImplementedError("Not yet implemented")
 
 
 @app.command()
@@ -317,10 +322,14 @@ def reset():
         if resource_obj["profile"] == "tabular-data-resource":
             if resource_obj.get("type") == "parameters":
                 # Don't overwrite external schema reference
-                # TODO: Do we just set the data to defaults here?
                 if resource_obj["data"]:
                     print(f"  - Resetting parameters {resource_obj['name']}")
                     resource_obj["data"] = []
+
+                    # TODO: Do we need a way to reset to defaults here?
+                    # We can't reset to defaults here as we don't know which
+                    # metaschema to use - this is only specified in an
+                    # argument space
             else:
                 if resource_obj["data"] or resource_obj["schema"]:
                     print(f"  - Resetting resource {resource_obj['name']}")
@@ -344,22 +353,25 @@ def load_resource(
     algorithm: str, argument: str, argument_space: str = "default"
 ) -> dict:
     """Load a resource object for a specified argument"""
-    print(f"[bold]=>[/bold] Finding resource for argument {argument}")
+    print(
+        f"[bold]=>[/bold] Finding resource for argument "
+        f"[bold]{argument}[/bold]"
+    )
     # Get name of resource and metaschema from specified argument
     with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
         argument_obj = find_by_name(json.load(f)["data"], argument)
         if argument_obj is None:
             raise ValueError(
                 (
-                    f'Can\'t find argument named "{argument}" in argument '
-                    f'space "{argument_space}"'
+                    f"Can't find argument named [bold]{argument}[/bold] in "
+                    f"argument space [bold]{argument_space}[/bold]"
                 )
             )
         resource = argument_obj["resource"]
         metaschema = argument_obj["metaschema"]
 
     # Load resource with metaschema
-    print(f'[bold]=>[/bold] Loading resource "{resource}"')
+    print(f"[bold]=>[/bold] Loading resource [bold]{resource}[/bold]")
     resource_path = f"{RESOURCES_PATH}/{resource}.json"
     with open(resource_path, "r") as rf, open(
         f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
@@ -401,6 +413,43 @@ def dumb_str_to_type(value) -> Any:
             return False
         else:
             return value
+
+
+def run_container_and_print_logs(
+    image: str,
+    volumes: List[str],
+    environment: Dict[str, str],
+    panel_title: str,
+):
+    # We have to detach to get access to the container object and its logs
+    # in the event of an error
+    container = client.containers.run(
+        image=image,
+        volumes=volumes,
+        environment=environment,
+        detach=True,
+    )
+
+    # Block until container is finished running
+    ret = container.wait()
+
+    # Print container logs
+    if container.logs():
+        print(
+            Panel(
+                container.logs().decode("utf-8").strip(),
+                title=panel_title,
+            )
+        )
+
+    if ret["StatusCode"] != 0:
+        raise docker.errors.ContainerError(
+            container=container,
+            exit_status=ret["StatusCode"],
+            command=None,
+            image=image,
+            stderr=None,
+        )
 
 
 if __name__ == "__main__":
