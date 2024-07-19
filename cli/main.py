@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import ntpath
+import time
 from pathlib import Path
 from ast import literal_eval
 from typing import Optional, Any, List, Dict
@@ -80,12 +81,26 @@ def load_resource(
 def write_resource(resource: dict) -> None:
     """Write updated resource to file"""
     resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
+
     print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
+
     resource.pop("metaschema")  # Don't write metaschema
+
     if resource["schema"].get("type") == "metaschema":
         resource["schema"] = "metaschema"  # Don't write metaschema copy
+
     with open(resource_path, "w") as f:
         json.dump(resource, f, indent=2)
+
+    # Update modified time in datapackage.json
+    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
+        dp = json.load(f)
+
+    dp["updated"] = int(time.time())
+
+    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "w") as f:
+        print("UPDATING MODIFIED TIME")
+        json.dump(dp, f, indent=2)
 
 
 def dumb_str_to_type(value) -> Any:
