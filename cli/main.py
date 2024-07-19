@@ -33,14 +33,124 @@ ARGUMENTS_PATH = DATAPACKAGE_PATH + "/arguments"
 VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
+# Helpers
+
+
+def load_resource(
+    algorithm: str, argument: str, argument_space: str = "default"
+) -> dict:
+    """Load a resource object for a specified argument"""
+    print(
+        f"[bold]=>[/bold] Finding resource for argument "
+        f"[bold]{argument}[/bold]"
+    )
+    # Get name of resource and metaschema from specified argument
+    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
+        argument_obj = find_by_name(json.load(f)["data"], argument)
+        if argument_obj is None:
+            raise ValueError(
+                (
+                    f"Can't find argument named [bold]{argument}[/bold] in "
+                    f"argument space [bold]{argument_space}[/bold]"
+                )
+            )
+        resource = argument_obj["resource"]
+        metaschema = argument_obj["metaschema"]
+
+    # Load resource with metaschema
+    print(f"[bold]=>[/bold] Loading resource [bold]{resource}[/bold]")
+    resource_path = f"{RESOURCES_PATH}/{resource}.json"
+    with open(resource_path, "r") as rf, open(
+        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
+    ) as mf:
+        resource_obj = json.load(rf)
+        resource_obj["metaschema"] = json.load(mf)["schema"]
+
+        # Load external schema
+        if resource_obj["schema"] == "metaschema":
+            # Copy metaschema to schema
+            resource_obj["schema"] = resource_obj["metaschema"]
+            # Label schema as metaschema copy so we don't overwrite it when
+            # writing back to resource
+            resource_obj["schema"]["type"] = "metaschema"
+
+    return resource_obj
+
+
+def write_resource(resource: dict) -> None:
+    """Write updated resource to file"""
+    resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
+    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
+    resource.pop("metaschema")  # Don't write metaschema
+    if resource["schema"].get("type") == "metaschema":
+        resource["schema"] = "metaschema"  # Don't write metaschema copy
+    with open(resource_path, "w") as f:
+        json.dump(resource, f, indent=2)
+
+
+def dumb_str_to_type(value) -> Any:
+    """Parse a string to any Python type"""
+    # Stupid workaround for Typer not supporting Union types :<
+    try:
+        return literal_eval(value)
+    except ValueError:
+        if value.lower() == "true":
+            return True
+        elif value.lower() == "false":
+            return False
+        else:
+            return value
+
+
+def run_container_and_print_logs(
+    image: str,
+    volumes: List[str],
+    environment: Dict[str, str],
+    panel_title: str,
+) -> None:
+    # We have to detach to get access to the container object and its logs
+    # in the event of an error
+    container = client.containers.run(
+        image=image,
+        volumes=volumes,
+        environment=environment,
+        detach=True,
+    )
+
+    # Block until container is finished running
+    ret = container.wait()
+
+    # Print container logs
+    if container.logs():
+        print(
+            Panel(
+                container.logs().decode("utf-8").strip(),
+                title=panel_title,
+            )
+        )
+
+    if ret["StatusCode"] != 0:
+        print(f"[red][bold]=> {image}[/bold] container execution failed[/red]")
+        exit(1)
+
+
+def get_default_algorithm() -> str:
+    """Return the default algorithm for the current datapackage"""
+    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
+        return json.load(f)["algorithms"][0]
+
+
+# Commands
+
+
 @app.command()
 def run(
     algorithm: Annotated[
-        str,
+        Optional[str],
         typer.Argument(
             help="The name of the algorithm to run", show_default=False
         ),
-    ],
+    ] = get_default_algorithm(),
     arguments: Annotated[
         Optional[str],
         typer.Argument(
@@ -60,7 +170,7 @@ def run(
     defined in the specified argument space
     """
     if container is None:
-        # Use container defined in argument space
+        # Get default container for the specified argument space
         with open(f"{ARGUMENTS_PATH}/{algorithm}.{arguments}.json", "r") as f:
             container = json.load(f)["container"]
 
@@ -152,10 +262,6 @@ def view(
 
 @app.command()
 def load(
-    algorithm: Annotated[
-        str,
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ],
     argument: Annotated[
         str,
         typer.Argument(
@@ -169,6 +275,10 @@ def load(
             help="Path to the data to ingest (xml, csv)", show_default=False
         ),
     ],
+    algorithm: Annotated[
+        Optional[str],
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ] = get_default_algorithm(),
     argument_space: Annotated[
         Optional[str],
         typer.Argument(
@@ -194,10 +304,6 @@ def load(
 
 @app.command()
 def set_param(
-    algorithm: Annotated[
-        str,
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ],
     argument: Annotated[
         str,
         typer.Argument(
@@ -220,6 +326,10 @@ def set_param(
             show_default=False,
         ),
     ],
+    algorithm: Annotated[
+        Optional[str],
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ] = get_default_algorithm(),
     argument_space: Annotated[
         Optional[str],
         typer.Argument(
@@ -276,10 +386,6 @@ def set_param(
 
 
 def set_arg(
-    algorithm: Annotated[
-        str,
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ],
     argument: Annotated[
         str,
         typer.Argument(
@@ -295,6 +401,10 @@ def set_arg(
             show_default=False,
         ),
     ],
+    algorithm: Annotated[
+        Optional[str],
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ] = get_default_algorithm(),
     argument_space: Annotated[
         Optional[str],
         typer.Argument(
@@ -347,109 +457,6 @@ def reset():
             os.remove(file.path)
 
     print("[bold]=>[/bold] Done!")
-
-
-def load_resource(
-    algorithm: str, argument: str, argument_space: str = "default"
-) -> dict:
-    """Load a resource object for a specified argument"""
-    print(
-        f"[bold]=>[/bold] Finding resource for argument "
-        f"[bold]{argument}[/bold]"
-    )
-    # Get name of resource and metaschema from specified argument
-    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
-        argument_obj = find_by_name(json.load(f)["data"], argument)
-        if argument_obj is None:
-            raise ValueError(
-                (
-                    f"Can't find argument named [bold]{argument}[/bold] in "
-                    f"argument space [bold]{argument_space}[/bold]"
-                )
-            )
-        resource = argument_obj["resource"]
-        metaschema = argument_obj["metaschema"]
-
-    # Load resource with metaschema
-    print(f"[bold]=>[/bold] Loading resource [bold]{resource}[/bold]")
-    resource_path = f"{RESOURCES_PATH}/{resource}.json"
-    with open(resource_path, "r") as rf, open(
-        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
-    ) as mf:
-        resource_obj = json.load(rf)
-        resource_obj["metaschema"] = json.load(mf)["schema"]
-
-        # Load external schema
-        if resource_obj["schema"] == "metaschema":
-            # Copy metaschema to schema
-            resource_obj["schema"] = resource_obj["metaschema"]
-            # Label schema as metaschema copy so we don't overwrite it when
-            # writing back to resource
-            resource_obj["schema"]["type"] = "metaschema"
-
-    return resource_obj
-
-
-def write_resource(resource: dict) -> None:
-    """Write updated resource to file"""
-    resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
-    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
-    resource.pop("metaschema")  # Don't write metaschema
-    if resource["schema"].get("type") == "metaschema":
-        resource["schema"] = "metaschema"  # Don't write metaschema copy
-    with open(resource_path, "w") as f:
-        json.dump(resource, f, indent=2)
-
-
-def dumb_str_to_type(value) -> Any:
-    """Parse a string to any Python type"""
-    # Stupid workaround for Typer not supporting Union types :<
-    try:
-        return literal_eval(value)
-    except ValueError:
-        if value.lower() == "true":
-            return True
-        elif value.lower() == "false":
-            return False
-        else:
-            return value
-
-
-def run_container_and_print_logs(
-    image: str,
-    volumes: List[str],
-    environment: Dict[str, str],
-    panel_title: str,
-):
-    # We have to detach to get access to the container object and its logs
-    # in the event of an error
-    container = client.containers.run(
-        image=image,
-        volumes=volumes,
-        environment=environment,
-        detach=True,
-    )
-
-    # Block until container is finished running
-    ret = container.wait()
-
-    # Print container logs
-    if container.logs():
-        print(
-            Panel(
-                container.logs().decode("utf-8").strip(),
-                title=panel_title,
-            )
-        )
-
-    if ret["StatusCode"] != 0:
-        raise docker.errors.ContainerError(
-            container=container,
-            exit_status=ret["StatusCode"],
-            command=None,
-            image=image,
-            stderr=None,
-        )
 
 
 if __name__ == "__main__":
