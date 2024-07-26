@@ -361,23 +361,22 @@ def set_param(
     resource = load_resource(algorithm, argument, argument_space)
 
     # Check it's a param resource
-    if resource.get("type") != "parameters":
+    if resource.get("profile") != "parameter-tabular-data-resource":
         raise ValueError(
             f"Resource \"{resource['name']}\" is not of type \"parameters\""
         )
 
-    # If data is not populated, populate with defaults from metaschema first
+    # If data is not populated, something has gone wrong
+    if not resource["data"]:
+        raise ValueError(
+            f"Parameter resource {resource['name']} \"data\" field is empty. "
+            'Try running "opendata-cli reset"?'
+        )
+
     print(
         f"[bold]=>[/bold] Setting parameter [bold]{name}[/bold] to value "
         f"[bold]{value}[/bold]"
     )
-    if not resource["data"]:
-        resource["data"] = [
-            {
-                field["name"]: field.get("default", None)
-                for field in resource["metaschema"]["fields"]
-            }
-        ]
 
     # Set parameter value (initial guess)
     try:
@@ -444,25 +443,24 @@ def reset():
         with open(path, "r") as f:
             resource_obj = json.load(f)
 
-        if resource_obj["profile"] == "tabular-data-resource":
-            if resource_obj.get("type") == "parameters":
-                # Don't overwrite external schema reference
-                if resource_obj["data"]:
-                    print(f"  - Resetting parameters {resource_obj['name']}")
-                    resource_obj["data"] = []
+        if resource_obj["profile"] == "parameter-tabular-data-resource":
+            if resource_obj["data"] != resource_obj["defaultData"]:
+                print(f"  - Resetting parameters {resource_obj['name']}")
+                resource_obj["data"] = resource_obj["defaultData"]
+        elif resource_obj["profile"] == "tabular-data-resource":
+            if resource_obj["data"] or resource_obj["schema"]:
+                print(f"  - Resetting resource {resource_obj['name']}")
+                resource_obj["data"] = []
+                resource_obj["schema"] = {}
+        else:
+            raise ValueError(
+                f"Unable to reset resource "
+                f"[bold]{resource_obj['name']}[/bold] with unrecognised "
+                f"resource profile [bold]{resource_obj['profile']}[/bold]"
+            )
 
-                    # TODO: Do we need a way to reset to defaults here?
-                    # We can't reset to defaults here as we don't know which
-                    # metaschema to use - this is only specified in an
-                    # argument space
-            else:
-                if resource_obj["data"] or resource_obj["schema"]:
-                    print(f"  - Resetting resource {resource_obj['name']}")
-                    resource_obj["data"] = []
-                    resource_obj["schema"] = {}
-
-            with open(path, "w") as f:
-                json.dump(resource_obj, f, indent=2)
+        with open(path, "w") as f:
+            json.dump(resource_obj, f, indent=2)
 
     # Remove view render artefacts - .png, .p
     print("[bold]=>[/bold] Checking view artefacts")
