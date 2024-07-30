@@ -511,6 +511,41 @@ def reset():
             print(f"  - Removed {ntpath.basename(file.path)}")
             os.remove(file.path)
 
+    # TODO:
+    # Reset arguments to argument defaults??? or interface defaults????
+    print("[bold]=>[/bold] Checking arguments")
+    arguments_pathlist = Path(ARGUMENTS_PATH).rglob("*.json")
+
+    for path in arguments_pathlist:
+        if path.stem.endswith("default"):
+            # Keep the default argument space, reset values to defaults
+            # Load argument space
+            with open(path, "r") as f:
+                argument_space = json.load(f)
+
+            # Get algorithm name to determine which algorithm interface to load
+            algorithm_name = str(path.stem).split(".")[0]
+
+            # Load interface for this argument space
+            with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
+                interface = json.load(f)["interface"]
+
+            for argument in argument_space["data"]:
+                # Reset argument to default values
+                argument.update(
+                    find_by_name(interface, argument["name"])["defaultData"]
+                )
+
+            # Write argument space
+            with open(path, "w") as f:
+                json.dump(argument_space, f, indent=2)
+
+            print(f"  - Reset {path.stem} values to default")
+        else:
+            # Delete any non-default argument spaces
+            os.remove(path)
+            print(f"  - Removed {path.stem}")
+
     print("[bold]=>[/bold] Done!")
 
 
