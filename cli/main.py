@@ -14,6 +14,7 @@ from typing import Optional, Any, List, Dict
 from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
+from tabulate import tabulate
 from opendatafit.resources import TabularDataResource
 from opendatafit.helpers import find_by_name
 
@@ -208,6 +209,39 @@ def run(
     )
 
     print(f"[bold]=>[/bold] Executed [bold]{algorithm}[/bold] successfully")
+
+
+@app.command()
+def view_table(
+    argument: Annotated[
+        str,
+        typer.Argument(
+            help="Name of argument to view",
+            show_default=False,
+        ),
+    ],
+    algorithm: Annotated[
+        Optional[str],
+        typer.Argument(help="Name of target algorithm", show_default=False),
+    ] = get_default_algorithm(),
+    argument_space: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Name of target argument space",
+            show_default=True,
+        ),
+    ] = "default",
+) -> None:
+    resource = load_resource(algorithm, argument, argument_space)
+
+    if "tabular-data-resource" in resource["profile"]:
+        print(tabulate(resource["data"], headers="keys", tablefmt="github"))
+    else:
+        print(
+            f"[red][bold]=>[/bold]Can't view non-tabular resource "
+            f"{resource['name']}[/red]"
+        )
+        exit(1)
 
 
 @app.command()
