@@ -238,6 +238,7 @@ def view_table(
         ),
     ] = "default",
 ) -> None:
+    """Print a tabular data argument"""
     resource = load_resource(algorithm, argument, argument_space)
 
     if "tabular-data-resource" in resource["profile"]:
