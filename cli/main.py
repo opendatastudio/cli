@@ -399,6 +399,7 @@ def set_param(
     )
 
 
+@app.command()
 def set_arg(
     argument: Annotated[
         str,
@@ -427,9 +428,50 @@ def set_arg(
         ),
     ] = "default",
 ) -> None:
-    # TODO: Set arg (e.g. enum, etc.)
-    # (make sure to validate type and value if enum)
-    raise NotImplementedError("Not yet implemented")
+    """Set an argument value"""
+    # Parse value (workaround for Typer not supporting Union types :<)
+    value = dumb_str_to_type(value)
+
+    # Load argument
+    argument_space_path = f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json"
+
+    with open(argument_space_path, "r") as f:
+        argument_space = json.load(f)
+
+    # Load interface
+    with open(f"{ALGORITHMS_PATH}/{algorithm}.json", "r") as f:
+        interface = find_by_name(json.load(f)["interface"], argument)
+
+    type_map = {
+        "string": str,
+        "boolean": bool,
+        "number": float | int,
+    }
+
+    # Check the value is of the expected type for this argument
+    # Raise some helpful errors
+    if interface.get("profile") == "tabular-data-resource":
+        raise ValueError('Use command "load" for tabular data resource')
+    elif interface.get("profile") == "parameter-tabular-data-resource":
+        raise ValueError('Use command "set-param" for parameter resource')
+    # Specify False as fallback value here to avoid "None"s leaking through
+    elif type_map.get(interface["type"], False) != type(value):
+        raise ValueError(f"Argument value must be of type {interface['type']}")
+
+    # If this argument has an enum, check the value is allowed
+    if interface.get("enum", False):
+        allowed_values = [i["value"] for i in interface["enum"]]
+        if value not in allowed_values:
+            raise ValueError(f"Argument value must be one of {allowed_values}")
+
+    # TODO: CHECK NULL IF NULL NOT ALLOWED
+
+    # Set value
+    find_by_name(argument_space["data"], argument)["value"] = value
+
+    # Write arguments
+    with open(argument_space_path, "w") as f:
+        json.dump(argument_space, f, indent=2)
 
 
 @app.command()
