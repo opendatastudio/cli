@@ -43,19 +43,24 @@ def load_resource(
 ) -> dict:
     """Load a resource object for a specified argument"""
     print(
-        f"[bold]=>[/bold] Finding resource for argument "
-        f"[bold]{argument}[/bold]"
+        (
+            f"[bold]=>[/bold] Finding resource for argument "
+            f"[bold]{argument}[/bold]"
+        )
     )
     # Get name of resource and metaschema from specified argument
     with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
         argument_obj = find_by_name(json.load(f)["data"], argument)
+
         if argument_obj is None:
-            raise ValueError(
+            print(
                 (
-                    f"Can't find argument named [bold]{argument}[/bold] in "
-                    f"argument space [bold]{argument_space}[/bold]"
+                    f"[red]Can't find argument named [bold]{argument}[/bold] "
+                    f"in argument space [bold]{argument_space}[/bold][/red]"
                 )
             )
+            exit(1)
+
         resource = argument_obj["resource"]
         metaschema = argument_obj["metaschema"]
 
@@ -145,7 +150,7 @@ def run_container_and_print_logs(
         )
 
     if ret["StatusCode"] != 0:
-        print(f"[red][bold]=> {image}[/bold] container execution failed[/red]")
+        print(f"[red][bold]{image}[/bold] container execution failed[/red]")
         exit(1)
 
 
@@ -191,9 +196,11 @@ def run(
 
     # Execute algorithm container and print any logs
     print(
-        f"[bold]=>[/bold] Executing [bold]{algorithm}[/bold] with "
-        f"[bold]{arguments}[/bold] argument space in container "
-        f"[bold]{container}[/bold]"
+        (
+            f"[bold]=>[/bold] Executing [bold]{algorithm}[/bold] with "
+            f"[bold]{arguments}[/bold] argument space in container "
+            f"[bold]{container}[/bold]"
+        )
     )
 
     run_container_and_print_logs(
@@ -236,10 +243,7 @@ def view_table(
     if "tabular-data-resource" in resource["profile"]:
         print(tabulate(resource["data"], headers="keys", tablefmt="github"))
     else:
-        print(
-            f"[red][bold]=>[/bold]Can't view non-tabular resource "
-            f"{resource['name']}[/red]"
-        )
+        print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
         exit(1)
 
 
@@ -268,10 +272,13 @@ def view(
     for resource in view_json["resources"]:
         with open(f"{RESOURCES_PATH}/{resource}.json", "r") as f:
             if not json.load(f)["data"]:
-                raise ValueError(
-                    f"""Can't render view with empty resource {resource}. \
-                        Have you executed the datapackage?"""
+                print(
+                    (
+                        f"[red]Can't render view with empty resource "
+                        f"{resource}. Have you executed the datapackage?[/red]"
+                    )
                 )
+                exit(1)
 
     if container is None:
         # Use container defined in view
@@ -395,30 +402,42 @@ def set_param(
 
     # Check it's a param resource
     if resource.get("profile") != "parameter-tabular-data-resource":
-        raise ValueError(
-            f"Resource \"{resource['name']}\" is not of type \"parameters\""
+        print(
+            (
+                f"[red]Resource \"{resource['name']}\" is not of type "
+                '"parameters"[/red]'
+            )
         )
+        exit(1)
 
     # If data is not populated, something has gone wrong
     if not resource["data"]:
-        raise ValueError(
-            f"Parameter resource {resource['name']} \"data\" field is empty. "
-            'Try running "opendata-cli reset"?'
+        print(
+            (
+                f"[red]Parameter resource {resource['name']} \"data\" field "
+                'is empty. Try running "opendata-cli reset"?[/red]'
+            )
         )
+        exit(1)
 
     print(
-        f"[bold]=>[/bold] Setting parameter [bold]{name}[/bold] to value "
-        f"[bold]{value}[/bold]"
+        (
+            f"[bold]=>[/bold] Setting parameter [bold]{name}[/bold] to value "
+            f"[bold]{value}[/bold]"
+        )
     )
 
     # Set parameter value (initial guess)
     try:
         find_by_name(resource["data"], name)["init"] = value
     except TypeError:
-        raise ValueError(
-            f'Could not find parameter "{name}" in resource '
-            f"\"{resource['name']}\""
+        print(
+            (
+                f'[red]Could not find parameter "{name}" in resource '
+                f"\"{resource['name']}\"[/red]"
+            )
         )
+        exit(1)
 
     # Write resource
     write_resource(resource)
@@ -484,18 +503,22 @@ def set_arg(
     # Check the value is of the expected type for this argument
     # Raise some helpful errors
     if interface.get("profile") == "tabular-data-resource":
-        raise ValueError('Use command "load" for tabular data resource')
+        print('[red]Use command "load" for tabular data resource[/red]')
+        exit(1)
     elif interface.get("profile") == "parameter-tabular-data-resource":
-        raise ValueError('Use command "set-param" for parameter resource')
+        print('[red]Use command "set-param" for parameter resource[/red]')
+        exit(1)
     # Specify False as fallback value here to avoid "None"s leaking through
     elif type_map.get(interface["type"], False) != type(value):
-        raise ValueError(f"Argument value must be of type {interface['type']}")
+        print(f"[red]Argument value must be of type {interface['type']}[/red]")
+        exit(1)
 
     # If this argument has an enum, check the value is allowed
     if interface.get("enum", False):
         allowed_values = [i["value"] for i in interface["enum"]]
         if value not in allowed_values:
-            raise ValueError(f"Argument value must be one of {allowed_values}")
+            print(f"[red]Argument value must be one of {allowed_values}[/red]")
+            exit(1)
 
     # TODO: CHECK NULL IF NULL NOT ALLOWED
 
@@ -528,11 +551,15 @@ def reset():
                 resource_obj["data"] = []
                 resource_obj["schema"] = {}
         else:
-            raise ValueError(
-                f"Unable to reset resource "
-                f"[bold]{resource_obj['name']}[/bold] with unrecognised "
-                f"resource profile [bold]{resource_obj['profile']}[/bold]"
+            print(
+                (
+                    f"[red]Unable to reset resource "
+                    f"[bold]{resource_obj['name']}[/bold] with unrecognised "
+                    f"resource profile [bold]{resource_obj['profile']}[/bold]"
+                    "[/red]"
+                )
             )
+            exit(1)
 
         with open(path, "w") as f:
             json.dump(resource_obj, f, indent=2)
