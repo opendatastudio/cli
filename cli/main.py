@@ -100,7 +100,6 @@ def write_resource(resource: dict) -> None:
     dp["updated"] = int(time.time())
 
     with open(f"{DATAPACKAGE_PATH}/datapackage.json", "w") as f:
-        print("UPDATING MODIFIED TIME")
         json.dump(dp, f, indent=2)
 
 
