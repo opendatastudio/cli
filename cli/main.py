@@ -533,7 +533,10 @@ def set_arg(
 
 @app.command()
 def reset():
-    """Remove all run outputs from datapackage - reset to empty state"""
+    """Reset datapackage to clean state
+
+    Removes all run outputs and resets argument spaces to default
+    """
     # Remove all data and schemas from tabular-data-resources
     print("[bold]=>[/bold] Checking tabular data resources")
     resource_pathlist = Path(RESOURCES_PATH).rglob("*.json")
