@@ -2,6 +2,9 @@
 
 A command line client for running opendata.studio datapackages.
 
+View usage documentation at [docs/README.md](docs/README.md).
+
+
 ## Development
 
 To install and test locally, navigate to the datapackage directory you want to
