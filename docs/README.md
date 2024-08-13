@@ -1,9 +1,9 @@
-# `opendata-cli`
+# `ods`
 
 **Usage**:
 
 ```console
-$ opendata-cli [OPTIONS] COMMAND [ARGS]...
+$ ods [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Options**:
@@ -22,28 +22,28 @@ $ opendata-cli [OPTIONS] COMMAND [ARGS]...
 * `view`: Render a view locally
 * `view-table`: Print a tabular data argument
 
-## `opendata-cli load`
+## `ods load`
 
 Load data into algorithm argument
 
 **Usage**:
 
 ```console
-$ opendata-cli load [OPTIONS] ARGUMENT PATH [ALGORITHM] [ARGUMENT_SPACE]
+$ ods load [OPTIONS] ARGUMENT_NAME PATH [ALGORITHM_NAME] [ARGUMENT_SPACE_NAME]
 ```
 
 **Arguments**:
 
-* `ARGUMENT`: Name of argument to populate  [required]
+* `ARGUMENT_NAME`: Name of argument to populate  [required]
 * `PATH`: Path to the data to ingest (xml, csv)  [required]
-* `[ALGORITHM]`: Name of target algorithm
-* `[ARGUMENT_SPACE]`: Name of target argument space  [default: default]
+* `[ALGORITHM_NAME]`: Name of target algorithm
+* `[ARGUMENT_SPACE_NAME]`: Name of target argument space  [default: default]
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli reset`
+## `ods reset`
 
 Reset datapackage to clean state
 
@@ -52,14 +52,14 @@ Removes all run outputs and resets argument spaces to default
 **Usage**:
 
 ```console
-$ opendata-cli reset [OPTIONS]
+$ ods reset [OPTIONS]
 ```
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli run`
+## `ods run`
 
 Run an algorithm
 
@@ -69,7 +69,7 @@ defined in the specified argument space
 **Usage**:
 
 ```console
-$ opendata-cli run [OPTIONS] [ALGORITHM] [ARGUMENTS] [CONTAINER]
+$ ods run [OPTIONS] [ALGORITHM] [ARGUMENTS] [CONTAINER]
 ```
 
 **Arguments**:
@@ -82,14 +82,14 @@ $ opendata-cli run [OPTIONS] [ALGORITHM] [ARGUMENTS] [CONTAINER]
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli set-arg`
+## `ods set-arg`
 
 Set an argument value
 
 **Usage**:
 
 ```console
-$ opendata-cli set-arg [OPTIONS] ARGUMENT VALUE [ALGORITHM] [ARGUMENT_SPACE]
+$ ods set-arg [OPTIONS] ARGUMENT VALUE [ALGORITHM] [ARGUMENT_SPACE]
 ```
 
 **Arguments**:
@@ -103,14 +103,14 @@ $ opendata-cli set-arg [OPTIONS] ARGUMENT VALUE [ALGORITHM] [ARGUMENT_SPACE]
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli set-param`
+## `ods set-param`
 
 Set a parameter value
 
 **Usage**:
 
 ```console
-$ opendata-cli set-param [OPTIONS] ARGUMENT NAME VALUE [ALGORITHM] [ARGUMENT_SPACE]
+$ ods set-param [OPTIONS] ARGUMENT NAME VALUE [ALGORITHM] [ARGUMENT_SPACE]
 ```
 
 **Arguments**:
@@ -125,14 +125,14 @@ $ opendata-cli set-param [OPTIONS] ARGUMENT NAME VALUE [ALGORITHM] [ARGUMENT_SPA
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli view`
+## `ods view`
 
 Render a view locally
 
 **Usage**:
 
 ```console
-$ opendata-cli view [OPTIONS] VIEW [CONTAINER]
+$ ods view [OPTIONS] VIEW [CONTAINER]
 ```
 
 **Arguments**:
@@ -144,21 +144,21 @@ $ opendata-cli view [OPTIONS] VIEW [CONTAINER]
 
 * `--help`: Show this message and exit.
 
-## `opendata-cli view-table`
+## `ods view-table`
 
 Print a tabular data argument
 
 **Usage**:
 
 ```console
-$ opendata-cli view-table [OPTIONS] ARGUMENT [ALGORITHM] [ARGUMENT_SPACE]
+$ ods view-table [OPTIONS] ARGUMENT_NAME [ALGORITHM_NAME] [ARGUMENT_SPACE_NAME]
 ```
 
 **Arguments**:
 
-* `ARGUMENT`: Name of argument to view  [required]
-* `[ALGORITHM]`: Name of target algorithm
-* `[ARGUMENT_SPACE]`: Name of target argument space  [default: default]
+* `ARGUMENT_NAME`: Name of argument to view  [required]
+* `[ALGORITHM_NAME]`: Name of target algorithm
+* `[ARGUMENT_SPACE_NAME]`: Name of target argument space  [default: default]
 
 **Options**:
 
