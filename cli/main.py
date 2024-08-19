@@ -7,7 +7,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import ntpath
-import time
 from pathlib import Path
 from ast import literal_eval
 from typing import Optional, Any, List, Dict
@@ -16,6 +15,11 @@ from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
 from opendatafit.resources import TabularDataResource
+from opendatafit.datapackage import (
+    load_argument,
+    load_resource,
+    write_resource,
+)
 from opendatafit.helpers import find_by_name
 
 
@@ -38,74 +42,27 @@ VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 # Helpers
 
 
-def load_resource(
-    algorithm: str, argument: str, argument_space: str = "default"
-) -> dict:
-    """Load a resource object for a specified argument"""
-    print(
-        (
-            f"[bold]=>[/bold] Finding resource for argument "
-            f"[bold]{argument}[/bold]"
-        )
+def load_resource_by_argument(
+    algorithm_name: str,
+    argument_name: str,
+    argument_space_name: str,
+    base_path: str,
+) -> TabularDataResource:
+    """Convenience function for loading resource by argument"""
+    # Load argument object to get resource and metaschema names
+    argument = load_argument(
+        algorithm_name,
+        argument_name,
+        argument_space_name,
+        base_path=DATAPACKAGE_PATH,
     )
-    # Get name of resource and metaschema from specified argument
-    with open(f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json", "r") as f:
-        argument_obj = find_by_name(json.load(f)["data"], argument)
 
-        if argument_obj is None:
-            print(
-                (
-                    f"[red]Can't find argument named [bold]{argument}[/bold] "
-                    f"in argument space [bold]{argument_space}[/bold][/red]"
-                )
-            )
-            exit(1)
-
-        resource = argument_obj["resource"]
-        metaschema = argument_obj["metaschema"]
-
-    # Load resource with metaschema
-    print(f"[bold]=>[/bold] Loading resource [bold]{resource}[/bold]")
-    resource_path = f"{RESOURCES_PATH}/{resource}.json"
-    with open(resource_path, "r") as rf, open(
-        f"{METASCHEMAS_PATH}/{metaschema}.json", "r"
-    ) as mf:
-        resource_obj = json.load(rf)
-        resource_obj["metaschema"] = json.load(mf)["schema"]
-
-        # Load external schema
-        if resource_obj["schema"] == "metaschema":
-            # Copy metaschema to schema
-            resource_obj["schema"] = resource_obj["metaschema"]
-            # Label schema as metaschema copy so we don't overwrite it when
-            # writing back to resource
-            resource_obj["schema"]["type"] = "metaschema"
-
-    return resource_obj
-
-
-def write_resource(resource: dict) -> None:
-    """Write updated resource to file"""
-    resource_path = f"{RESOURCES_PATH}/{resource['name']}.json"
-
-    print(f"[bold]=>[/bold] Writing to resource at {resource_path}")
-
-    resource.pop("metaschema")  # Don't write metaschema
-
-    if resource["schema"].get("type") == "metaschema":
-        resource["schema"] = "metaschema"  # Don't write metaschema copy
-
-    with open(resource_path, "w") as f:
-        json.dump(resource, f, indent=2)
-
-    # Update modified time in datapackage.json
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        dp = json.load(f)
-
-    dp["updated"] = int(time.time())
-
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "w") as f:
-        json.dump(dp, f, indent=2)
+    # Load resource into TabularDataResource object
+    return load_resource(
+        resource_name=argument["resource"],
+        metaschema_name=argument["metaschema"],
+        base_path=DATAPACKAGE_PATH,
+    )
 
 
 def dumb_str_to_type(value) -> Any:
@@ -165,19 +122,19 @@ def get_default_algorithm() -> str:
 
 @app.command()
 def run(
-    algorithm: Annotated[
+    algorithm_name: Annotated[
         Optional[str],
         typer.Argument(
             help="The name of the algorithm to run", show_default=False
         ),
     ] = get_default_algorithm(),
-    arguments: Annotated[
+    argument_space_name: Annotated[
         Optional[str],
         typer.Argument(
             help="The name of the argument space to pass to the algorithm"
         ),
     ] = "default",
-    container: Annotated[
+    container_name: Annotated[
         Optional[str],
         typer.Argument(
             help="The name of the container to run in", show_default=False
@@ -189,48 +146,53 @@ def run(
     By default, the run command executes the algorithm with the container
     defined in the specified argument space
     """
-    if container is None:
+    if container_name is None:
         # Get default container for the specified argument space
-        with open(f"{ARGUMENTS_PATH}/{algorithm}.{arguments}.json", "r") as f:
-            container = json.load(f)["container"]
+        with open(
+            f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json",
+            "r",
+        ) as f:
+            container_name = json.load(f)["container"]
 
     # Execute algorithm container and print any logs
     print(
         (
-            f"[bold]=>[/bold] Executing [bold]{algorithm}[/bold] with "
-            f"[bold]{arguments}[/bold] argument space in container "
-            f"[bold]{container}[/bold]"
+            f"[bold]=>[/bold] Executing [bold]{algorithm_name}[/bold] with "
+            f"[bold]{argument_space_name}[/bold] argument space in container "
+            f"[bold]{container_name}[/bold]"
         )
     )
 
     run_container_and_print_logs(
-        image=container,
+        image=container_name,
         volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
         environment={
-            "ALGORITHM": algorithm,
-            "CONTAINER": container,
-            "ARGUMENTS": arguments,
+            "ALGORITHM": algorithm_name,
+            "CONTAINER": container_name,
+            "ARGUMENTS": argument_space_name,
         },
         panel_title="Algorithm container output",
     )
 
-    print(f"[bold]=>[/bold] Executed [bold]{algorithm}[/bold] successfully")
+    print(
+        f"[bold]=>[/bold] Executed [bold]{algorithm_name}[/bold] successfully"
+    )
 
 
 @app.command()
 def view_table(
-    argument: Annotated[
+    argument_name: Annotated[
         str,
         typer.Argument(
             help="Name of argument to view",
             show_default=False,
         ),
     ],
-    algorithm: Annotated[
+    algorithm_name: Annotated[
         Optional[str],
         typer.Argument(help="Name of target algorithm", show_default=False),
     ] = get_default_algorithm(),
-    argument_space: Annotated[
+    argument_space_name: Annotated[
         Optional[str],
         typer.Argument(
             help="Name of target argument space",
@@ -239,10 +201,15 @@ def view_table(
     ] = "default",
 ) -> None:
     """Print a tabular data argument"""
-    resource = load_resource(algorithm, argument, argument_space)
+    resource = load_resource_by_argument(
+        algorithm_name,
+        argument_name,
+        argument_space_name,
+        base_path=DATAPACKAGE_PATH,
+    )
 
-    if "tabular-data-resource" in resource["profile"]:
-        print(tabulate(resource["data"], headers="keys", tablefmt="github"))
+    if "tabular-data-resource" in resource.profile:
+        print(tabulate(resource.data, headers="keys", tablefmt="github"))
     else:
         print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
         exit(1)
@@ -250,13 +217,13 @@ def view_table(
 
 @app.command()
 def view(
-    view: Annotated[
+    view_name: Annotated[
         str,
         typer.Argument(
             help="The name of the view to render", show_default=False
         ),
     ],
-    container: Annotated[
+    container_name: Annotated[
         Optional[str],
         typer.Argument(
             help="The name of the container to render the view in",
@@ -266,38 +233,41 @@ def view(
 ) -> None:
     """Render a view locally"""
     # Load view json
-    with open(f"{VIEWS_PATH}/{view}.json", "r") as f:
-        view_json = json.load(f)
+    with open(f"{VIEWS_PATH}/{view_name}.json", "r") as f:
+        view = json.load(f)
 
     # Check required resources are populated
-    for resource in view_json["resources"]:
-        with open(f"{RESOURCES_PATH}/{resource}.json", "r") as f:
+    for resource_name in view["resources"]:
+        with open(f"{RESOURCES_PATH}/{resource_name}.json", "r") as f:
             if not json.load(f)["data"]:
                 print(
                     (
                         f"[red]Can't render view with empty resource "
-                        f"{resource}. Have you executed the datapackage?[/red]"
+                        f"{resource_name}. Have you executed the datapackage?"
+                        "[/red]"
                     )
                 )
                 exit(1)
 
-    if container is None:
+    if container_name is None:
         # Use container defined in view
-        container = view_json["container"]
+        container_name = view["container"]
 
     # Execute view
-    print(f"[bold]=>[/bold] Generating [bold]{view}[/bold] view")
+    print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
     run_container_and_print_logs(
-        image=container,
+        image=container_name,
         volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
         environment={
-            "VIEW": view,
+            "VIEW": view_name,
         },
         panel_title="View container output",
     )
 
-    print(f"[bold]=>[/bold] Successfully generated [bold]{view}[/bold] view")
+    print(
+        f"[bold]=>[/bold] Successfully generated [bold]{view_name}[/bold] view"
+    )
 
     print(
         "[blue][bold]=>[/bold] Loading interactive view in web browser[/blue]"
@@ -305,7 +275,7 @@ def view(
 
     matplotlib.use("WebAgg")
 
-    with open(f"{VIEWS_PATH}/{view}.p", "rb") as f:
+    with open(f"{VIEWS_PATH}/{view_name}.p", "rb") as f:
         # NOTE: The matplotlib version in CLI must be >= the version of
         # matplotlib used to generate the plot (which is chosen by the user)
         # So the CLI should be kept up to date at all times
@@ -318,7 +288,7 @@ def view(
 
 @app.command()
 def load(
-    argument: Annotated[
+    argument_name: Annotated[
         str,
         typer.Argument(
             help="Name of argument to populate",
@@ -331,11 +301,11 @@ def load(
             help="Path to the data to ingest (xml, csv)", show_default=False
         ),
     ],
-    algorithm: Annotated[
+    algorithm_name: Annotated[
         Optional[str],
         typer.Argument(help="Name of target algorithm", show_default=False),
     ] = get_default_algorithm(),
-    argument_space: Annotated[
+    argument_space_name: Annotated[
         Optional[str],
         typer.Argument(
             help="Name of target argument space",
@@ -345,36 +315,40 @@ def load(
 ) -> None:
     """Load data into algorithm argument"""
     # Load resource into TabularDataResource object
-    resource_obj = load_resource(algorithm, argument, argument_space)
-    table = TabularDataResource(resource=resource_obj)
+    resource = load_resource_by_argument(
+        algorithm_name,
+        argument_name,
+        argument_space_name,
+        base_path=DATAPACKAGE_PATH,
+    )
 
     # Read CSV into resource
     print(f"[bold]=>[/bold] Reading {path}")
-    table.data = pd.read_csv(path)
+    resource.data = pd.read_csv(path)
 
     # Write to resource
-    write_resource(table.to_dict())
+    write_resource(resource, base_path=DATAPACKAGE_PATH)
 
     print("[bold]=>[/bold] Resource successfully loaded!")
 
 
 @app.command()
 def set_param(
-    argument: Annotated[
+    argument_name: Annotated[
         str,
         typer.Argument(
             help="Name of parameter argument to populate",
             show_default=False,
         ),
     ],
-    name: Annotated[
+    param_name: Annotated[
         str,
         typer.Argument(
             help="Name of parameter to set",
             show_default=False,
         ),
     ],
-    value: Annotated[
+    param_value: Annotated[
         str,  # Workaround for union types not being supported by Typer yet
         # Union[str, int, float, bool],
         typer.Argument(
@@ -382,11 +356,11 @@ def set_param(
             show_default=False,
         ),
     ],
-    algorithm: Annotated[
+    algorithm_name: Annotated[
         Optional[str],
         typer.Argument(help="Name of target algorithm", show_default=False),
     ] = get_default_algorithm(),
-    argument_space: Annotated[
+    argument_space_name: Annotated[
         Optional[str],
         typer.Argument(
             help="Name of target argument space",
@@ -396,72 +370,77 @@ def set_param(
 ) -> None:
     """Set a parameter value"""
     # Parse value (workaround for Typer not supporting Union types :<)
-    value = dumb_str_to_type(value)
+    param_value = dumb_str_to_type(param_value)
 
     # Load param resource
-    resource = load_resource(algorithm, argument, argument_space)
+    resource = load_resource_by_argument(
+        algorithm_name,
+        argument_name,
+        argument_space_name,
+        base_path=DATAPACKAGE_PATH,
+    )
 
     # Check it's a param resource
-    if resource.get("profile") != "parameter-tabular-data-resource":
+    if resource["profile"] != "parameter-tabular-data-resource":
         print(
             (
-                f"[red]Resource \"{resource['name']}\" is not of type "
-                '"parameters"[/red]'
+                f"[red]Resource [bold]{resource['name']}[/bold] is not of "
+                'type "parameters"[/red]'
             )
         )
         exit(1)
 
     # If data is not populated, something has gone wrong
-    if not resource["data"]:
+    if not resource:
         print(
             (
-                f"[red]Parameter resource {resource['name']} \"data\" field "
-                'is empty. Try running "opendata-cli reset"?[/red]'
+                f"[red]Parameter resource [bold]{resource['name']}[/bold] "
+                '"data" field is empty. Try running "ods reset"?[/red]'
             )
         )
         exit(1)
 
     print(
         (
-            f"[bold]=>[/bold] Setting parameter [bold]{name}[/bold] to value "
-            f"[bold]{value}[/bold]"
+            f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
+            f"value [bold]{param_value}[/bold]"
         )
     )
 
     # Set parameter value (initial guess)
     try:
-        find_by_name(resource["data"], name)["init"] = value
+        find_by_name(resource["data"], param_name)["init"] = param_value
     except TypeError:
         print(
             (
-                f'[red]Could not find parameter "{name}" in resource '
-                f"\"{resource['name']}\"[/red]"
+                f'[red]Could not find parameter "{param_name}" in resource '
+                f"[bold]{resource['name']}[/bold][/red]"
             )
         )
         exit(1)
 
     # Write resource
-    write_resource(resource)
+    write_resource(resource, base_path=DATAPACKAGE_PATH)
 
     print(
         (
-            f"[bold]=>[/bold] Successfully set parameter [bold]{name}[/bold] "
-            f"value to [bold]{value}[/bold] in parameter resource "
-            f"[bold]{resource['name']}[/bold]"
+            f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
+            f"[/bold] value to [bold]{param_value}[/bold] in parameter "
+            f"resource [bold]{resource['name']}[/bold]"
         )
     )
 
 
 @app.command()
 def set_arg(
-    argument: Annotated[
+    argument_name: Annotated[
         str,
         typer.Argument(
             help="Name of argument to set",
             show_default=False,
         ),
     ],
-    value: Annotated[
+    argument_value: Annotated[
         str,  # Workaround for union types not being supported by Typer yet
         # Union[str, int, float, bool],
         typer.Argument(
@@ -469,11 +448,11 @@ def set_arg(
             show_default=False,
         ),
     ],
-    algorithm: Annotated[
+    algorithm_name: Annotated[
         Optional[str],
         typer.Argument(help="Name of target algorithm", show_default=False),
     ] = get_default_algorithm(),
-    argument_space: Annotated[
+    argument_space_name: Annotated[
         Optional[str],
         typer.Argument(
             help="Name of target argument space",
@@ -483,17 +462,19 @@ def set_arg(
 ) -> None:
     """Set an argument value"""
     # Parse value (workaround for Typer not supporting Union types :<)
-    value = dumb_str_to_type(value)
+    argument_value = dumb_str_to_type(argument_value)
 
     # Load argument
-    argument_space_path = f"{ARGUMENTS_PATH}/{algorithm}.{argument_space}.json"
+    argument_space_path = (
+        f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json"
+    )
 
     with open(argument_space_path, "r") as f:
         argument_space = json.load(f)
 
     # Load interface
-    with open(f"{ALGORITHMS_PATH}/{algorithm}.json", "r") as f:
-        interface = find_by_name(json.load(f)["interface"], argument)
+    with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
+        interface = find_by_name(json.load(f)["interface"], argument_name)
 
     type_map = {
         "string": str,
@@ -510,25 +491,38 @@ def set_arg(
         print('[red]Use command "set-param" for parameter resource[/red]')
         exit(1)
     # Specify False as fallback value here to avoid "None"s leaking through
-    elif type_map.get(interface["type"], False) != type(value):
+    elif type_map.get(interface["type"], False) != type(argument_value):
         print(f"[red]Argument value must be of type {interface['type']}[/red]")
         exit(1)
 
     # If this argument has an enum, check the value is allowed
     if interface.get("enum", False):
         allowed_values = [i["value"] for i in interface["enum"]]
-        if value not in allowed_values:
+        if argument_value not in allowed_values:
             print(f"[red]Argument value must be one of {allowed_values}[/red]")
             exit(1)
 
-    # TODO: CHECK NULL IF NULL NOT ALLOWED
+    # Check if nullable
+    if not interface["null"]:
+        if not argument_value:
+            print("[red]Argument value cannot be null[/red]")
+            exit(1)
 
     # Set value
-    find_by_name(argument_space["data"], argument)["value"] = value
+    find_by_name(argument_space["data"], argument_name)[
+        "value"
+    ] = argument_value
 
     # Write arguments
     with open(argument_space_path, "w") as f:
         json.dump(argument_space, f, indent=2)
+
+    print(
+        (
+            f"[bold]=>[/bold] Successfully set [bold]{argument_name}[/bold] "
+            "argument"
+        )
+    )
 
 
 @app.command()
