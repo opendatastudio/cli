@@ -14,10 +14,8 @@ from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
-from opendatafit.resources import TabularDataResource
 from opendatafit.datapackage import (
-    load_argument,
-    load_resource,
+    load_resource_by_argument,
     write_resource,
 )
 from opendatafit.helpers import find_by_name
@@ -40,29 +38,6 @@ VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
 # Helpers
-
-
-def load_resource_by_argument(
-    algorithm_name: str,
-    argument_name: str,
-    argument_space_name: str,
-    base_path: str,
-) -> TabularDataResource:
-    """Convenience function for loading resource by argument"""
-    # Load argument object to get resource and metaschema names
-    argument = load_argument(
-        algorithm_name,
-        argument_name,
-        argument_space_name,
-        base_path=DATAPACKAGE_PATH,
-    )
-
-    # Load resource into TabularDataResource object
-    return load_resource(
-        resource_name=argument["resource"],
-        metaschema_name=argument["metaschema"],
-        base_path=DATAPACKAGE_PATH,
-    )
 
 
 def dumb_str_to_type(value) -> Any:
