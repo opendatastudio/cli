@@ -356,10 +356,10 @@ def set_param(
     )
 
     # Check it's a param resource
-    if resource["profile"] != "parameter-tabular-data-resource":
+    if resource.profile != "parameter-tabular-data-resource":
         print(
             (
-                f"[red]Resource [bold]{resource['name']}[/bold] is not of "
+                f"[red]Resource [bold]{resource.name}[/bold] is not of "
                 'type "parameters"[/red]'
             )
         )
@@ -369,7 +369,7 @@ def set_param(
     if not resource:
         print(
             (
-                f"[red]Parameter resource [bold]{resource['name']}[/bold] "
+                f"[red]Parameter resource [bold]{resource.name}[/bold] "
                 '"data" field is empty. Try running "ods reset"?[/red]'
             )
         )
@@ -384,12 +384,15 @@ def set_param(
 
     # Set parameter value (initial guess)
     try:
-        find_by_name(resource["data"], param_name)["init"] = param_value
-    except TypeError:
+        # This will generate a key error if param_name doesn't exist
+        # The assignment doesn't unfortunately
+        resource.data.loc[param_name]  # Ensure param_name row exists
+        resource.data.loc[param_name, "init"] = param_value
+    except KeyError:
         print(
             (
                 f'[red]Could not find parameter "{param_name}" in resource '
-                f"[bold]{resource['name']}[/bold][/red]"
+                f"[bold]{resource.name}[/bold][/red]"
             )
         )
         exit(1)
@@ -401,7 +404,7 @@ def set_param(
         (
             f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
             f"[/bold] value to [bold]{param_value}[/bold] in parameter "
-            f"resource [bold]{resource['name']}[/bold]"
+            f"resource [bold]{resource.name}[/bold]"
         )
     )
 
