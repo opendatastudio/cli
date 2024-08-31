@@ -1,5 +1,5 @@
 [project]
-name = "opendata-cli"
+name = "opendatacli"
 version = "0.0.0"
 description = "A command line client for running opendata.studio datapackages"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ dependencies = [
     "docker >= 7.1.0, < 8",
     "matplotlib >= 3.9.1, < 4",
     "tornado",  # Required for rendering interactive plots
-    "opendatafit @ git+ssh://git@github.com/opendatafit/opendatafit@11-resource-load-write-helpers",
+    "opendatapy @ git+ssh://git@github.com/opendatastudio/opendatapy@main",
     "tabulate",
 ]
 
@@ -21,15 +21,15 @@ dependencies = [
 ods = "cli.main:app"
 
 [project.urls]
-"Homepage" = "https://github.com/opendatafit/cli"
-"Bug Tracker" = "https://github.com/opendatafit/cli/issues"
+"Homepage" = "https://github.com/opendatastudio/cli"
+"Bug Tracker" = "https://github.com/opendatastudio/cli/issues"
 
 [project.optional-dependencies]
 development = [
     "pre-commit",
     "build",
 ]
-all = ["opendata-cli[development]"]
+all = ["opendatacli[development]"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

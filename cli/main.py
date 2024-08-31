@@ -14,11 +14,11 @@ from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
-from opendatafit.datapackage import (
+from opendatapy.datapackage import (
     load_resource_by_argument,
     write_resource,
 )
-from opendatafit.helpers import find_by_name
+from opendatapy.helpers import find_by_name
 
 
 app = typer.Typer()

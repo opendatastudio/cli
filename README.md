@@ -1,4 +1,4 @@
-# opendata-cli
+# opendata.studio CLI
 
 A command line client for running opendata.studio datapackages.
 
@@ -22,5 +22,5 @@ pip install -e [/path/to/cli]
 
 You can now run the CLI script with:
 ```
-opendata-cli
+ods
 ```
