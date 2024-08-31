@@ -109,25 +109,18 @@ def run(
             help="The name of the argument space to pass to the algorithm"
         ),
     ] = "default",
-    container_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="The name of the container to run in", show_default=False
-        ),
-    ] = None,
 ) -> None:
     """Run an algorithm
 
     By default, the run command executes the algorithm with the container
     defined in the specified argument space
     """
-    if container_name is None:
-        # Get default container for the specified argument space
-        with open(
-            f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json",
-            "r",
-        ) as f:
-            container_name = json.load(f)["container"]
+    # Get execution container name from the argument space
+    with open(
+        f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json",
+        "r",
+    ) as f:
+        container_name = json.load(f)["container"]
 
     # Execute algorithm container and print any logs
     print(
@@ -143,8 +136,7 @@ def run(
         volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
         environment={
             "ALGORITHM": algorithm_name,
-            "CONTAINER": container_name,
-            "ARGUMENTS": argument_space_name,
+            "ARGUMENT_SPACE": argument_space_name,
         },
         panel_title="Algorithm container output",
     )
@@ -198,13 +190,6 @@ def view(
             help="The name of the view to render", show_default=False
         ),
     ],
-    container_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="The name of the container to render the view in",
-            show_default=False,
-        ),
-    ] = None,
 ) -> None:
     """Render a view locally"""
     # Load view json
@@ -224,9 +209,8 @@ def view(
                 )
                 exit(1)
 
-    if container_name is None:
-        # Use container defined in view
-        container_name = view["container"]
+    # Get container name defined in view
+    container_name = view["container"]
 
     # Execute view
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
