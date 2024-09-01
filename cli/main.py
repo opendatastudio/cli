@@ -15,6 +15,10 @@ from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
 from opendatapy.datapackage import (
+    ExecutionError,
+    ResourceError,
+    execute_datapackage,
+    execute_view,
     load_resource_by_argument,
     write_resource,
 )
@@ -54,38 +58,6 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def run_container_and_print_logs(
-    image: str,
-    volumes: List[str],
-    environment: Dict[str, str],
-    panel_title: str,
-) -> None:
-    # We have to detach to get access to the container object and its logs
-    # in the event of an error
-    container = client.containers.run(
-        image=image,
-        volumes=volumes,
-        environment=environment,
-        detach=True,
-    )
-
-    # Block until container is finished running
-    ret = container.wait()
-
-    # Print container logs
-    if container.logs():
-        print(
-            Panel(
-                container.logs().decode("utf-8").strip(),
-                title=panel_title,
-            )
-        )
-
-    if ret["StatusCode"] != 0:
-        print(f"[red][bold]{image}[/bold] container execution failed[/red]")
-        exit(1)
-
-
 def get_default_algorithm() -> str:
     """Return the default algorithm for the current datapackage"""
     with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
@@ -110,36 +82,35 @@ def run(
         ),
     ] = "default",
 ) -> None:
-    """Run an algorithm
-
-    By default, the run command executes the algorithm with the container
-    defined in the specified argument space
-    """
-    # Get execution container name from the argument space
-    with open(
-        f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json",
-        "r",
-    ) as f:
-        container_name = json.load(f)["container"]
-
+    """Run an algorithm with the specified argument space"""
     # Execute algorithm container and print any logs
     print(
         (
             f"[bold]=>[/bold] Executing [bold]{algorithm_name}[/bold] with "
-            f"[bold]{argument_space_name}[/bold] argument space in container "
-            f"[bold]{container_name}[/bold]"
+            f"[bold]{argument_space_name}[/bold] argument space"
         )
     )
 
-    run_container_and_print_logs(
-        image=container_name,
-        volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
-        environment={
-            "ALGORITHM": algorithm_name,
-            "ARGUMENT_SPACE": argument_space_name,
-        },
-        panel_title="Algorithm container output",
-    )
+    try:
+        logs = execute_datapackage(client, algorithm_name, argument_space_name, base_path=DATAPACKAGE_PATH)
+    except ExecutionError as e:
+        print(type(e.logs))
+        print(
+            Panel(
+                e.logs,
+                title="[bold red]Execution error[/bold red]",
+            )
+        )
+        print(f"[red]Container execution failed[/red]")
+        exit(1)
+
+    if logs:
+        print(
+            Panel(
+                logs,
+                title="[bold]Execution container output[/bold]",
+            )
+        )
 
     print(
         f"[bold]=>[/bold] Executed [bold]{algorithm_name}[/bold] successfully"
@@ -192,37 +163,32 @@ def view(
     ],
 ) -> None:
     """Render a view locally"""
-    # Load view json
-    with open(f"{VIEWS_PATH}/{view_name}.json", "r") as f:
-        view = json.load(f)
-
-    # Check required resources are populated
-    for resource_name in view["resources"]:
-        with open(f"{RESOURCES_PATH}/{resource_name}.json", "r") as f:
-            if not json.load(f)["data"]:
-                print(
-                    (
-                        f"[red]Can't render view with empty resource "
-                        f"{resource_name}. Have you executed the datapackage?"
-                        "[/red]"
-                    )
-                )
-                exit(1)
-
-    # Get container name defined in view
-    container_name = view["container"]
-
-    # Execute view
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
-    run_container_and_print_logs(
-        image=container_name,
-        volumes=[f"{DATAPACKAGE_PATH}:/usr/src/app/datapackage"],
-        environment={
-            "VIEW": view_name,
-        },
-        panel_title="View container output",
-    )
+
+
+    try:
+        logs = execute_view(client, view_name, base_path=DATAPACKAGE_PATH)
+    except ResourceError as e:
+        print("[red]" + e.message + "[/red]")
+        exit(1)
+    except ExecutionError as e:
+        print(
+            Panel(
+                e.logs,
+                title="[bold red]View execution error[/bold red]",
+            )
+        )
+        print(f"[red]View execution failed[/red]")
+        exit(1)
+
+    if logs:
+        print(
+            Panel(
+                logs,
+                title="[bold]View container output[/bold]",
+            )
+        )
 
     print(
         f"[bold]=>[/bold] Successfully generated [bold]{view_name}[/bold] view"

@@ -15,7 +15,9 @@ contourpy==1.2.1
 cycler==0.12.1
     # via matplotlib
 docker==7.1.0
-    # via opendatacli (pyproject.toml)
+    # via
+    #   opendatacli (pyproject.toml)
+    #   opendatapy
 fonttools==4.53.1
     # via matplotlib
 idna==3.7
