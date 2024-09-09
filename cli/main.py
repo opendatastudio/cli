@@ -19,7 +19,7 @@ from opendatapy.datapackage import (
     ResourceError,
     execute_datapackage,
     execute_view,
-    load_variable,
+    load_resource_by_variable,
     write_resource,
 )
 from opendatapy.helpers import find_by_name
@@ -133,7 +133,7 @@ def view_table(
     ] = get_default_configuration(),
 ) -> None:
     """Print a tabular data variable"""
-    resource = load_variable(
+    resource = load_resource_by_variable(
         variable_name,
         configuration_name,
         base_path=DATAPACKAGE_PATH,
@@ -227,7 +227,7 @@ def load(
 ) -> None:
     """Load data into configuration variable"""
     # Load resource into TabularDataResource object
-    resource = load_variable(
+    resource = load_resource_by_variable(
         variable_name,
         configuration_name,
         base_path=DATAPACKAGE_PATH,
@@ -280,7 +280,7 @@ def set_param(
     param_value = dumb_str_to_type(param_value)
 
     # Load param resource
-    resource = load_variable(
+    resource = load_resource_by_variable(
         variable_name,
         configuration_name,
         base_path=DATAPACKAGE_PATH,
