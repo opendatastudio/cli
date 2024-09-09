@@ -378,9 +378,9 @@ def set_var(
     # Get algorithm name from configuration
     algorithm_name = str(configuration_name).split(".")[0]
 
-    # Load interface
+    # Load signature
     with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-        interface = find_by_name(json.load(f)["interface"], variable_name)
+        signature = find_by_name(json.load(f)["signature"], variable_name)
 
     type_map = {
         "string": str,
@@ -390,26 +390,26 @@ def set_var(
 
     # Check the value is of the expected type for this variable
     # Raise some helpful errors
-    if interface.get("profile") == "tabular-data-resource":
+    if signature.get("profile") == "tabular-data-resource":
         print('[red]Use command "load" for tabular data resource[/red]')
         exit(1)
-    elif interface.get("profile") == "parameter-tabular-data-resource":
+    elif signature.get("profile") == "parameter-tabular-data-resource":
         print('[red]Use command "set-param" for parameter resource[/red]')
         exit(1)
     # Specify False as fallback value here to avoid "None"s leaking through
-    elif type_map.get(interface["type"], False) != type(variable_value):
-        print(f"[red]Variable value must be of type {interface['type']}[/red]")
+    elif type_map.get(signature["type"], False) != type(variable_value):
+        print(f"[red]Variable value must be of type {signature['type']}[/red]")
         exit(1)
 
     # If this variable has an enum, check the value is allowed
-    if interface.get("enum", False):
-        allowed_values = [i["value"] for i in interface["enum"]]
+    if signature.get("enum", False):
+        allowed_values = [i["value"] for i in signature["enum"]]
         if variable_value not in allowed_values:
             print(f"[red]Variable value must be one of {allowed_values}[/red]")
             exit(1)
 
     # Check if nullable
-    if not interface["null"]:
+    if not signature["null"]:
         if not variable_value:
             print("[red]Variable value cannot be null[/red]")
             exit(1)
@@ -485,17 +485,17 @@ def reset():
             with open(path, "r") as f:
                 configuration = json.load(f)
 
-            # Get algorithm name to determine which algorithm interface to load
+            # Get algorithm name to determine which algorithm signature to load
             algorithm_name = str(path.stem).split(".")[0]
 
-            # Load algorithm interface for this configuration
+            # Load algorithm signature for this configuration
             with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-                interface = json.load(f)["interface"]
+                signature = json.load(f)["signature"]
 
             for variable in configuration["data"]:
-                # Reset variables to default values from interface
+                # Reset variables to default values from signature
                 variable.update(
-                    find_by_name(interface, variable["name"])["defaultData"]
+                    find_by_name(signature, variable["name"])["defaultData"]
                 )
 
             # Write configuration
