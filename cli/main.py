@@ -9,7 +9,7 @@ import pandas as pd
 import ntpath
 from pathlib import Path
 from ast import literal_eval
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any
 from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
@@ -19,7 +19,7 @@ from opendatapy.datapackage import (
     ResourceError,
     execute_datapackage,
     execute_view,
-    load_resource_by_argument,
+    load_resource_by_variable,
     write_resource,
 )
 from opendatapy.helpers import find_by_name
@@ -35,9 +35,8 @@ client = docker.from_env()
 # TODO: Validate we actually are, and that this is a datapackage
 DATAPACKAGE_PATH = os.getcwd()
 RESOURCES_PATH = DATAPACKAGE_PATH + "/resources"
-METASCHEMAS_PATH = DATAPACKAGE_PATH + "/metaschemas"
 ALGORITHMS_PATH = DATAPACKAGE_PATH + "/algorithms"
-ARGUMENTS_PATH = DATAPACKAGE_PATH + "/arguments"
+CONFIGURATIONS_PATH = DATAPACKAGE_PATH + "/configurations"
 VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
@@ -58,10 +57,10 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def get_default_algorithm() -> str:
-    """Return the default algorithm for the current datapackage"""
+def get_default_configuration() -> str:
+    """Return the default configuration for the current datapackage"""
     with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        return json.load(f)["algorithms"][0]
+        return json.load(f)["defaultConfiguration"]
 
 
 # Commands
@@ -69,30 +68,21 @@ def get_default_algorithm() -> str:
 
 @app.command()
 def run(
-    algorithm_name: Annotated[
+    configuration_name: Annotated[
         Optional[str],
-        typer.Argument(
-            help="The name of the algorithm to run", show_default=False
-        ),
-    ] = get_default_algorithm(),
-    argument_space_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="The name of the argument space to pass to the algorithm"
-        ),
-    ] = "default",
+        typer.Argument(help="The name of the configuration to run"),
+    ] = get_default_configuration(),
 ) -> None:
-    """Run an algorithm with the specified argument space"""
+    """Run the specified configuration"""
     # Execute algorithm container and print any logs
-    print(
-        (
-            f"[bold]=>[/bold] Executing [bold]{algorithm_name}[/bold] with "
-            f"[bold]{argument_space_name}[/bold] argument space"
-        )
-    )
+    print(f"[bold]=>[/bold] Executing [bold]{configuration_name}[/bold]")
 
     try:
-        logs = execute_datapackage(client, algorithm_name, argument_space_name, base_path=DATAPACKAGE_PATH)
+        logs = execute_datapackage(
+            client,
+            configuration_name,
+            base_path=DATAPACKAGE_PATH,
+        )
     except ExecutionError as e:
         print(type(e.logs))
         print(
@@ -101,7 +91,7 @@ def run(
                 title="[bold red]Execution error[/bold red]",
             )
         )
-        print(f"[red]Container execution failed[/red]")
+        print("[red]Container execution failed[/red]")
         exit(1)
 
     if logs:
@@ -113,36 +103,34 @@ def run(
         )
 
     print(
-        f"[bold]=>[/bold] Executed [bold]{algorithm_name}[/bold] successfully"
+        (
+            f"[bold]=>[/bold] Executed [bold]{configuration_name}[/bold] "
+            "successfully"
+        )
     )
 
 
 @app.command()
 def view_table(
-    argument_name: Annotated[
+    variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of argument to view",
+            help="Name of variable to view",
             show_default=False,
         ),
     ],
-    algorithm_name: Annotated[
-        Optional[str],
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ] = get_default_algorithm(),
-    argument_space_name: Annotated[
+    configuration_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target argument space",
+            help="Name of target configuration",
             show_default=True,
         ),
-    ] = "default",
+    ] = get_default_configuration(),
 ) -> None:
-    """Print a tabular data argument"""
-    resource = load_resource_by_argument(
-        algorithm_name,
-        argument_name,
-        argument_space_name,
+    """Print a tabular data variable"""
+    resource = load_resource_by_variable(
+        variable_name,
+        configuration_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -165,8 +153,6 @@ def view(
     """Render a view locally"""
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
-
-
     try:
         logs = execute_view(client, view_name, base_path=DATAPACKAGE_PATH)
     except ResourceError as e:
@@ -179,7 +165,7 @@ def view(
                 title="[bold red]View execution error[/bold red]",
             )
         )
-        print(f"[red]View execution failed[/red]")
+        print("[red]View execution failed[/red]")
         exit(1)
 
     if logs:
@@ -213,37 +199,32 @@ def view(
 
 @app.command()
 def load(
-    argument_name: Annotated[
+    variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of argument to populate",
+            help="Name of variable to populate",
             show_default=False,
         ),
     ],
     path: Annotated[
         str,
         typer.Argument(
-            help="Path to the data to ingest (xml, csv)", show_default=False
+            help="Path to data to ingest (xml, csv)", show_default=False
         ),
     ],
-    algorithm_name: Annotated[
-        Optional[str],
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ] = get_default_algorithm(),
-    argument_space_name: Annotated[
+    configuration_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target argument space",
+            help="Name of target configuration",
             show_default=True,
         ),
-    ] = "default",
+    ] = get_default_configuration(),
 ) -> None:
-    """Load data into algorithm argument"""
+    """Load data into configuration variable"""
     # Load resource into TabularDataResource object
-    resource = load_resource_by_argument(
-        algorithm_name,
-        argument_name,
-        argument_space_name,
+    resource = load_resource_by_variable(
+        variable_name,
+        configuration_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -259,10 +240,10 @@ def load(
 
 @app.command()
 def set_param(
-    argument_name: Annotated[
+    variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of parameter argument to populate",
+            help="Name of parameter variable to populate",
             show_default=False,
         ),
     ],
@@ -281,27 +262,22 @@ def set_param(
             show_default=False,
         ),
     ],
-    algorithm_name: Annotated[
-        Optional[str],
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ] = get_default_algorithm(),
-    argument_space_name: Annotated[
+    configuration_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target argument space",
+            help="Name of target configuration",
             show_default=True,
         ),
-    ] = "default",
+    ] = get_default_configuration(),
 ) -> None:
     """Set a parameter value"""
     # Parse value (workaround for Typer not supporting Union types :<)
     param_value = dumb_str_to_type(param_value)
 
     # Load param resource
-    resource = load_resource_by_argument(
-        algorithm_name,
-        argument_name,
-        argument_space_name,
+    resource = load_resource_by_variable(
+        variable_name,
+        configuration_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -360,15 +336,15 @@ def set_param(
 
 
 @app.command()
-def set_arg(
-    argument_name: Annotated[
+def set_var(
+    variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of argument to set",
+            help="Name of variable to set",
             show_default=False,
         ),
     ],
-    argument_value: Annotated[
+    variable_value: Annotated[
         str,  # Workaround for union types not being supported by Typer yet
         # Union[str, int, float, bool],
         typer.Argument(
@@ -376,33 +352,30 @@ def set_arg(
             show_default=False,
         ),
     ],
-    algorithm_name: Annotated[
-        Optional[str],
-        typer.Argument(help="Name of target algorithm", show_default=False),
-    ] = get_default_algorithm(),
-    argument_space_name: Annotated[
+    configuration_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target argument space",
+            help="Name of target configuration",
             show_default=True,
         ),
-    ] = "default",
+    ] = get_default_configuration(),
 ) -> None:
-    """Set an argument value"""
+    """Set a variable value"""
     # Parse value (workaround for Typer not supporting Union types :<)
-    argument_value = dumb_str_to_type(argument_value)
+    variable_value = dumb_str_to_type(variable_value)
 
-    # Load argument
-    argument_space_path = (
-        f"{ARGUMENTS_PATH}/{algorithm_name}.{argument_space_name}.json"
-    )
+    # Load variable
+    configuration_path = f"{CONFIGURATIONS_PATH}/{configuration_name}.json"
 
-    with open(argument_space_path, "r") as f:
-        argument_space = json.load(f)
+    with open(configuration_path, "r") as f:
+        configuration = json.load(f)
 
-    # Load interface
+    # Get algorithm name from configuration
+    algorithm_name = configuration_name.split(".")[0]
+
+    # Load signature
     with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-        interface = find_by_name(json.load(f)["interface"], argument_name)
+        signature = find_by_name(json.load(f)["signature"], variable_name)
 
     type_map = {
         "string": str,
@@ -410,45 +383,45 @@ def set_arg(
         "number": float | int,
     }
 
-    # Check the value is of the expected type for this argument
+    # Check the value is of the expected type for this variable
     # Raise some helpful errors
-    if interface.get("profile") == "tabular-data-resource":
+    if signature.get("profile") == "tabular-data-resource":
         print('[red]Use command "load" for tabular data resource[/red]')
         exit(1)
-    elif interface.get("profile") == "parameter-tabular-data-resource":
+    elif signature.get("profile") == "parameter-tabular-data-resource":
         print('[red]Use command "set-param" for parameter resource[/red]')
         exit(1)
     # Specify False as fallback value here to avoid "None"s leaking through
-    elif type_map.get(interface["type"], False) != type(argument_value):
-        print(f"[red]Argument value must be of type {interface['type']}[/red]")
+    elif type_map.get(signature["type"], False) != type(variable_value):
+        print(f"[red]Variable value must be of type {signature['type']}[/red]")
         exit(1)
 
-    # If this argument has an enum, check the value is allowed
-    if interface.get("enum", False):
-        allowed_values = [i["value"] for i in interface["enum"]]
-        if argument_value not in allowed_values:
-            print(f"[red]Argument value must be one of {allowed_values}[/red]")
+    # If this variable has an enum, check the value is allowed
+    if signature.get("enum", False):
+        allowed_values = [i["value"] for i in signature["enum"]]
+        if variable_value not in allowed_values:
+            print(f"[red]Variable value must be one of {allowed_values}[/red]")
             exit(1)
 
     # Check if nullable
-    if not interface["null"]:
-        if not argument_value:
-            print("[red]Argument value cannot be null[/red]")
+    if not signature["null"]:
+        if not variable_value:
+            print("[red]Variable value cannot be null[/red]")
             exit(1)
 
     # Set value
-    find_by_name(argument_space["data"], argument_name)[
+    find_by_name(configuration["data"], variable_name)[
         "value"
-    ] = argument_value
+    ] = variable_value
 
-    # Write arguments
-    with open(argument_space_path, "w") as f:
-        json.dump(argument_space, f, indent=2)
+    # Write variables
+    with open(configuration_path, "w") as f:
+        json.dump(configuration, f, indent=2)
 
     print(
         (
-            f"[bold]=>[/bold] Successfully set [bold]{argument_name}[/bold] "
-            "argument"
+            f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
+            "variable"
         )
     )
 
@@ -457,7 +430,7 @@ def set_arg(
 def reset():
     """Reset datapackage to clean state
 
-    Removes all run outputs and resets argument spaces to default
+    Removes all run outputs and resets configurations to default
     """
     # Remove all data and schemas from tabular-data-resources
     print("[bold]=>[/bold] Checking tabular data resources")
@@ -497,38 +470,36 @@ def reset():
             print(f"  - Removed {ntpath.basename(file.path)}")
             os.remove(file.path)
 
-    # TODO:
-    # Reset arguments to argument defaults??? or interface defaults????
-    print("[bold]=>[/bold] Checking arguments")
-    arguments_pathlist = Path(ARGUMENTS_PATH).rglob("*.json")
+    print("[bold]=>[/bold] Checking variables in configuration")
+    configurations_pathlist = Path(CONFIGURATIONS_PATH).rglob("*.json")
 
-    for path in arguments_pathlist:
+    for path in configurations_pathlist:
         if path.stem.endswith("default"):
-            # Keep the default argument space, reset values to defaults
-            # Load argument space
+            # Keep the default configuration, reset values to defaults
+            # Load configuration
             with open(path, "r") as f:
-                argument_space = json.load(f)
+                configuration = json.load(f)
 
-            # Get algorithm name to determine which algorithm interface to load
+            # Get algorithm name to determine which algorithm signature to load
             algorithm_name = str(path.stem).split(".")[0]
 
-            # Load interface for this argument space
+            # Load algorithm signature for this configuration
             with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-                interface = json.load(f)["interface"]
+                signature = json.load(f)["signature"]
 
-            for argument in argument_space["data"]:
-                # Reset argument to default values
-                argument.update(
-                    find_by_name(interface, argument["name"])["defaultData"]
+            for variable in configuration["data"]:
+                # Reset variables to default values from signature
+                variable.update(
+                    find_by_name(signature, variable["name"])["defaultData"]
                 )
 
-            # Write argument space
+            # Write configuration
             with open(path, "w") as f:
-                json.dump(argument_space, f, indent=2)
+                json.dump(configuration, f, indent=2)
 
             print(f"  - Reset {path.stem} values to default")
         else:
-            # Delete any non-default argument spaces
+            # Delete any non-default  spaces
             os.remove(path)
             print(f"  - Removed {path.stem}")
 
