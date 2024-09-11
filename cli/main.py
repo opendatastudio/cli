@@ -57,15 +57,10 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def get_default_algorithm() -> str:
-    """Return the default algorithm for the current datapackage"""
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        return json.load(f)["algorithms"][0]
-
-
 def get_default_configuration() -> str:
     """Return the default configuration for the current datapackage"""
-    return get_default_algorithm() + ".default"
+    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
+        return json.load(f)["defaultConfiguration"]
 
 
 # Commands
