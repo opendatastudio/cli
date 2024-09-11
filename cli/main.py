@@ -376,7 +376,7 @@ def set_var(
         configuration = json.load(f)
 
     # Get algorithm name from configuration
-    algorithm_name = str(configuration_name).split(".")[0]
+    algorithm_name = configuration_name.split(".")[0]
 
     # Load signature
     with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
