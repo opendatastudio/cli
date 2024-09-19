@@ -21,8 +21,10 @@ from opendatapy.datapackage import (
     execute_view,
     load_resource_by_variable,
     write_resource,
+    load_configuration,
+    write_configuration,
 )
-from opendatapy.helpers import find_by_name
+from opendatapy.helpers import find_by_name, find
 
 
 app = typer.Typer()
@@ -61,6 +63,76 @@ def get_default_configuration() -> str:
     """Return the default configuration for the current datapackage"""
     with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
         return json.load(f)["defaultConfiguration"]
+
+
+def get_default_algorithm() -> str:
+    """Return the default algorithm for the current datapackage"""
+    return get_default_configuration().split(".")[0]
+
+
+def execute_relationship(variable_name: str, configuration_name: str) -> None:
+    """Execute any relationships applied to the given source variable"""
+    # Load configuration for modification
+    configuration = load_configuration(configuration_name)
+
+    # Load associated relationship
+    with open(f"{ALGORITHMS_PATH}/{get_default_algorithm()}.json", "r") as f:
+        relationship = find(
+            json.load(f)["relationships"], "source", variable_name
+        )
+
+    # Apply relationship rules
+    for rule in relationship["rules"]:
+        if rule["type"] == "value":
+            # Check if this rule applies to current configuration state
+
+            # Get source variable value
+            value = find_by_name(configuration["data"], variable_name)["value"]
+
+            # If the source variable value matches the rule value, execute
+            # the relationship
+            if value in rule["values"]:
+                for target in rule["targets"]:
+                    if "disabled" in target:
+                        # Set target variable disabled value
+                        target_variable = find_by_name(
+                            configuration["data"], target["name"]
+                        )
+                        target_variable["disabled"] = target["disabled"]
+
+                    if target["type"] == "resource":
+                        # Set target resource data
+                        target_resource = load_resource_by_variable(
+                            variable_name=target["name"],
+                            configuration_name=configuration["name"],
+                            base_path=DATAPACKAGE_PATH,
+                            as_dict=True,
+                        )
+
+                        target_resource["data"] = target["data"]
+
+                        write_resource(
+                            target_resource, base_path=DATAPACKAGE_PATH
+                        )
+                    elif target["type"] == "value":
+                        # Set target variable value
+                        target_variable = find_by_name(
+                            configuration["data"], target["name"]
+                        )
+                        target_variable["value"] = target["value"]
+                    else:
+                        raise NotImplementedError(
+                            (
+                                'Only "resource" and "value" type rule '
+                                "targets are implemented"
+                            )
+                        )
+
+        else:
+            raise NotImplementedError("Only value-based rules are implemented")
+
+    # Write modified configuration
+    write_configuration(configuration, base_path=DATAPACKAGE_PATH)
 
 
 # Commands
@@ -414,9 +486,14 @@ def set_var(
         "value"
     ] = variable_value
 
-    # Write variables
+    # Write configuration
     with open(configuration_path, "w") as f:
         json.dump(configuration, f, indent=2)
+
+    # Execute any applicable relationships
+    execute_relationship(
+        variable_name=variable_name, configuration_name=configuration_name
+    )
 
     print(
         (
@@ -432,7 +509,7 @@ def reset():
 
     Removes all run outputs and resets configurations to default
     """
-    # Remove all data and schemas from tabular-data-resources
+    # Remove all data and schemas from (parameter-)tabular-data-resources
     print("[bold]=>[/bold] Checking tabular data resources")
     resource_pathlist = Path(RESOURCES_PATH).rglob("*.json")
 
@@ -441,22 +518,26 @@ def reset():
             resource_obj = json.load(f)
 
         if resource_obj["profile"] == "parameter-tabular-data-resource":
-            if resource_obj["data"] != resource_obj["defaultData"]:
-                print(f"  - Resetting parameters {resource_obj['name']}")
-                resource_obj["data"] = resource_obj["defaultData"]
+            # Don't reset schema for parameter-tabulra-data-resources
+            if resource_obj["data"]:
+                print(
+                    "  - Resetting parameter resource [bold]"
+                    f"{resource_obj['name']}[/bold]"
+                )
+                resource_obj["data"] = []
         elif resource_obj["profile"] == "tabular-data-resource":
             if resource_obj["data"] or resource_obj["schema"]:
-                print(f"  - Resetting resource {resource_obj['name']}")
+                print(
+                    f"  - Resetting resource [bold]{resource_obj['name']}"
+                    "[/bold]"
+                )
                 resource_obj["data"] = []
                 resource_obj["schema"] = {}
         else:
             print(
-                (
-                    f"[red]Unable to reset resource "
-                    f"[bold]{resource_obj['name']}[/bold] with unrecognised "
-                    f"resource profile [bold]{resource_obj['profile']}[/bold]"
-                    "[/red]"
-                )
+                f"[red]Unable to reset resource [bold]{resource_obj['name']}"
+                "[/bold] with unrecognised resource profile [bold]"
+                f"{resource_obj['profile']}[/bold][/red]"
             )
             exit(1)
 
@@ -473,6 +554,8 @@ def reset():
     print("[bold]=>[/bold] Checking variables in configuration")
     configurations_pathlist = Path(CONFIGURATIONS_PATH).rglob("*.json")
 
+    # Remove all non-default configurations and reset to defaults from
+    # algorithm signature
     for path in configurations_pathlist:
         if path.stem.endswith("default"):
             # Keep the default configuration, reset values to defaults
@@ -490,18 +573,38 @@ def reset():
             for variable in configuration["data"]:
                 # Reset variables to default values from signature
                 variable.update(
-                    find_by_name(signature, variable["name"])["defaultData"]
+                    find_by_name(signature, variable["name"])[
+                        "defaultConfiguration"
+                    ]
                 )
 
             # Write configuration
             with open(path, "w") as f:
                 json.dump(configuration, f, indent=2)
 
-            print(f"  - Reset {path.stem} values to default")
+            print(f"  - Reset [bold]{path.stem}[/bold] values to default")
         else:
             # Delete any non-default  spaces
             os.remove(path)
-            print(f"  - Removed {path.stem}")
+            print(f"  - Removed [bold]{path.stem}[/bold]")
+
+    # Apply relationships
+    # Load default algorithm relationships
+    print("[bold]=>[/bold] Executing relationships")
+
+    with open(f"{ALGORITHMS_PATH}/{get_default_algorithm()}.json", "r") as f:
+        relationships = json.load(f)["relationships"]
+
+    # Execute all relationships in order
+    for relationship in relationships:
+        execute_relationship(
+            variable_name=relationship["source"],
+            configuration_name=get_default_configuration(),
+        )
+        print(
+            f'  - Executed relationship for [bold]{relationship["source"]}'
+            "[/bold]"
+        )
 
     print("[bold]=>[/bold] Done!")
 
