@@ -175,10 +175,8 @@ def run(
         )
 
     print(
-        (
-            f"[bold]=>[/bold] Executed [bold]{configuration_name}[/bold] "
-            "successfully"
-        )
+        f"[bold]=>[/bold] Executed [bold]{configuration_name}[/bold] "
+        "successfully"
     )
 
 
@@ -356,28 +354,22 @@ def set_param(
     # Check it's a param resource
     if resource.profile != "parameter-tabular-data-resource":
         print(
-            (
-                f"[red]Resource [bold]{resource.name}[/bold] is not of "
-                'type "parameters"[/red]'
-            )
+            f"[red]Resource [bold]{resource.name}[/bold] is not of type "
+            '"parameters"[/red]'
         )
         exit(1)
 
     # If data is not populated, something has gone wrong
     if not resource:
         print(
-            (
-                f"[red]Parameter resource [bold]{resource.name}[/bold] "
-                '"data" field is empty. Try running "ods reset"?[/red]'
-            )
+            f'[red]Parameter resource [bold]{resource.name}[/bold] "data" '
+            'field is empty. Try running "ods reset"?[/red]'
         )
         exit(1)
 
     print(
-        (
-            f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
-            f"value [bold]{param_value}[/bold]"
-        )
+        f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
+        f"value [bold]{param_value}[/bold]"
     )
 
     # Set parameter value (initial guess)
@@ -388,10 +380,8 @@ def set_param(
         resource.data.loc[param_name, "init"] = param_value
     except KeyError:
         print(
-            (
-                f'[red]Could not find parameter "{param_name}" in resource '
-                f"[bold]{resource.name}[/bold][/red]"
-            )
+            f'[red]Could not find parameter "{param_name}" in resource '
+            f"[bold]{resource.name}[/bold][/red]"
         )
         exit(1)
 
@@ -399,11 +389,9 @@ def set_param(
     write_resource(resource, base_path=DATAPACKAGE_PATH)
 
     print(
-        (
-            f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
-            f"[/bold] value to [bold]{param_value}[/bold] in parameter "
-            f"resource [bold]{resource.name}[/bold]"
-        )
+        f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
+        f"[/bold] value to [bold]{param_value}[/bold] in parameter resource "
+        f"[bold]{resource.name}[/bold]"
     )
 
 
@@ -496,10 +484,8 @@ def set_var(
     )
 
     print(
-        (
-            f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
-            "variable"
-        )
+        f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
+        "variable"
     )
 
 
