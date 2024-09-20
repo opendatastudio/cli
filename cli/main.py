@@ -422,10 +422,10 @@ def set_param(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
     ] = get_default_run(),
@@ -436,8 +436,8 @@ def set_param(
 
     # Load param resource
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -476,7 +476,9 @@ def set_param(
         exit(1)
 
     # Write resource
-    write_resource(resource, base_path=DATAPACKAGE_PATH)
+    write_resource(
+        run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+    )
 
     print(
         f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
