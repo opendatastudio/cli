@@ -231,19 +231,19 @@ def init(
 
 @app.command()
 def run(
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
-        typer.Argument(help="The name of the configuration to run"),
+        typer.Argument(help="The name of the run to execute"),
     ] = get_default_run(),
 ) -> None:
     """Run the specified configuration"""
     # Execute algorithm container and print any logs
-    print(f"[bold]=>[/bold] Executing [bold]{configuration_name}[/bold]")
+    print(f"[bold]=>[/bold] Executing [bold]{run_name}[/bold]")
 
     try:
         logs = execute_datapackage(
             client,
-            configuration_name,
+            run_name,
             base_path=DATAPACKAGE_PATH,
         )
     except ExecutionError as e:
@@ -265,10 +265,7 @@ def run(
             )
         )
 
-    print(
-        f"[bold]=>[/bold] Executed [bold]{configuration_name}[/bold] "
-        "successfully"
-    )
+    print(f"[bold]=>[/bold] Executed [bold]{run_name}[/bold] " "successfully")
 
 
 @app.command()
@@ -373,10 +370,10 @@ def load(
             help="Path to data to ingest (xml, csv)", show_default=False
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
     ] = get_default_run(),
@@ -384,8 +381,8 @@ def load(
     """Load data into configuration variable"""
     # Load resource into TabularDataResource object
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -394,7 +391,9 @@ def load(
     resource.data = pd.read_csv(path)
 
     # Write to resource
-    write_resource(resource, base_path=DATAPACKAGE_PATH)
+    write_resource(
+        run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+    )
 
     print("[bold]=>[/bold] Resource successfully loaded!")
 
@@ -503,10 +502,10 @@ def set_var(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
     ] = get_default_run(),
@@ -515,19 +514,16 @@ def set_var(
     # Parse value (workaround for Typer not supporting Union types :<)
     variable_value = dumb_str_to_type(variable_value)
 
-    # Load variable
-    configuration_path = f"{CONFIGURATIONS_PATH}/{configuration_name}.json"
+    # Load algorithum signature
+    signature = find_by_name(
+        load_algorithm(
+            algorithm_name=run_name.split(".")[0],
+            base_path=DATAPACKAGE_PATH,
+        )["signature"],
+        variable_name,
+    )
 
-    with open(configuration_path, "r") as f:
-        configuration = json.load(f)
-
-    # Get algorithm name from configuration
-    algorithm_name = configuration_name.split(".")[0]
-
-    # Load signature
-    with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-        signature = find_by_name(json.load(f)["signature"], variable_name)
-
+    # Convenience dict mapping opends types to Python types
     type_map = {
         "string": str,
         "boolean": bool,
@@ -560,18 +556,19 @@ def set_var(
             print("[red]Variable value cannot be null[/red]")
             exit(1)
 
-    # Set value
-    find_by_name(configuration["data"], variable_name)[
-        "value"
-    ] = variable_value
+    # Load run configuration
+    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+
+    # Set variable value
+    find_by_name(run["data"], variable_name)["value"] = variable_value
 
     # Write configuration
-    with open(configuration_path, "w") as f:
-        json.dump(configuration, f, indent=2)
+    write_run_configuration(run, base_path=DATAPACKAGE_PATH)
 
-    # Execute any applicable relationships
+    # Execute any relationships applied to this variable value
     execute_relationship(
-        variable_name=variable_name, configuration_name=configuration_name
+        run_name=run_name,
+        variable_name=variable_name,
     )
 
     print(
