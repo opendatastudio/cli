@@ -278,23 +278,27 @@ def view_table(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
     ] = get_default_run(),
 ) -> None:
     """Print a tabular data variable"""
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
     if "tabular-data-resource" in resource.profile:
-        print(tabulate(resource.data, headers="keys", tablefmt="github"))
+        print(
+            tabulate(
+                resource.to_dict()["data"], headers="keys", tablefmt="github"
+            )
+        )
     else:
         print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
         exit(1)
