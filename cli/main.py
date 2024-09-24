@@ -24,6 +24,8 @@ from opendatapy.datapackage import (
     load_run_configuration,
     write_run_configuration,
     load_algorithm,
+    view_file_path,
+    get_algorithm_name,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -247,7 +249,6 @@ def run(
             base_path=DATAPACKAGE_PATH,
         )
     except ExecutionError as e:
-        print(type(e.logs))
         print(
             Panel(
                 e.logs,
@@ -265,7 +266,7 @@ def run(
             )
         )
 
-    print(f"[bold]=>[/bold] Executed [bold]{run_name}[/bold] " "successfully")
+    print(f"[bold]=>[/bold] Executed [bold]{run_name}[/bold] successfully")
 
 
 @app.command()
@@ -307,12 +308,21 @@ def view(
             help="The name of the view to render", show_default=False
         ),
     ],
+    run_name: Annotated[
+        Optional[str],
+        typer.Argument(help="The name of the run to view"),
+    ] = get_default_run(),
 ) -> None:
     """Render a view locally"""
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
     try:
-        logs = execute_view(client, view_name, base_path=DATAPACKAGE_PATH)
+        logs = execute_view(
+            docker_client=client,
+            run_name=run_name,
+            view_name=view_name,
+            base_path=DATAPACKAGE_PATH,
+        )
     except ResourceError as e:
         print("[red]" + e.message + "[/red]")
         exit(1)
@@ -344,7 +354,14 @@ def view(
 
     matplotlib.use("WebAgg")
 
-    with open(f"{VIEWS_PATH}/{view_name}.p", "rb") as f:
+    with open(
+        view_file_path.format(
+            base_path=DATAPACKAGE_PATH,
+            algorithm_name=get_algorithm_name(run_name),
+            view_file_name=f"{view_name}.p",
+        ),
+        "rb",
+    ) as f:
         # NOTE: The matplotlib version in CLI must be >= the version of
         # matplotlib used to generate the plot (which is chosen by the user)
         # So the CLI should be kept up to date at all times
