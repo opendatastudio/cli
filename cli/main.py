@@ -1,4 +1,5 @@
 import os
+import shutil
 import json
 import pickle
 import typer
@@ -6,8 +7,6 @@ import docker
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import ntpath
-from pathlib import Path
 from ast import literal_eval
 from typing import Optional, Any
 from typing_extensions import Annotated
@@ -25,6 +24,7 @@ from opendatapy.datapackage import (
     write_run_configuration,
     load_algorithm,
     view_artefacts_path,
+    datapackage_path,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -38,10 +38,6 @@ client = docker.from_env()
 # Assume we are always at the datapackage root
 # TODO: Validate we actually are, and that this is a datapackage
 DATAPACKAGE_PATH = os.getcwd()
-RESOURCES_PATH = DATAPACKAGE_PATH + "/resources"
-ALGORITHMS_PATH = DATAPACKAGE_PATH + "/algorithms"
-CONFIGURATIONS_PATH = DATAPACKAGE_PATH + "/configurations"
-VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
 # Helpers
@@ -605,104 +601,19 @@ def reset():
 
     Removes all run outputs and resets configurations to default
     """
-    # Remove all data and schemas from (parameter-)tabular-data-resources
-    print("[bold]=>[/bold] Checking tabular data resources")
-    resource_pathlist = Path(RESOURCES_PATH).rglob("*.json")
+    # Remove all run directories
+    for f in os.scandir(DATAPACKAGE_PATH):
+        if f.is_dir() and f.path.endswith(".run"):
+            print(f"[bold]=>[/bold] Deleting [bold]{f.name}[/bold]")
+            shutil.rmtree(f.path)
 
-    for path in resource_pathlist:
-        with open(path, "r") as f:
-            resource_obj = json.load(f)
-
-        if resource_obj["profile"] == "parameter-tabular-data-resource":
-            # Don't reset schema for parameter-tabulra-data-resources
-            if resource_obj["data"]:
-                print(
-                    "  - Resetting parameter resource [bold]"
-                    f"{resource_obj['name']}[/bold]"
-                )
-                resource_obj["data"] = []
-        elif resource_obj["profile"] == "tabular-data-resource":
-            if resource_obj["data"] or resource_obj["schema"]:
-                print(
-                    f"  - Resetting resource [bold]{resource_obj['name']}"
-                    "[/bold]"
-                )
-                resource_obj["data"] = []
-                resource_obj["schema"] = {}
-        else:
-            print(
-                f"[red]Unable to reset resource [bold]{resource_obj['name']}"
-                "[/bold] with unrecognised resource profile [bold]"
-                f"{resource_obj['profile']}[/bold][/red]"
-            )
-            exit(1)
-
-        with open(path, "w") as f:
-            json.dump(resource_obj, f, indent=2)
-
-    # Remove view render artefacts - .png, .p
-    print("[bold]=>[/bold] Checking view artefacts")
-    for file in os.scandir(VIEWS_PATH):
-        if file.path.endswith(".png") or file.path.endswith(".p"):
-            print(f"  - Removed {ntpath.basename(file.path)}")
-            os.remove(file.path)
-
-    print("[bold]=>[/bold] Checking variables in configuration")
-    configurations_pathlist = Path(CONFIGURATIONS_PATH).rglob("*.json")
-
-    # Remove all non-default configurations and reset to defaults from
-    # algorithm signature
-    for path in configurations_pathlist:
-        if path.stem.endswith("default"):
-            # Keep the default configuration, reset values to defaults
-            # Load configuration
-            with open(path, "r") as f:
-                configuration = json.load(f)
-
-            # Get algorithm name to determine which algorithm signature to load
-            algorithm_name = str(path.stem).split(".")[0]
-
-            # Load algorithm signature for this configuration
-            with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-                signature = json.load(f)["signature"]
-
-            for variable in configuration["data"]:
-                # Reset variables to default values from signature
-                variable.update(
-                    find_by_name(signature, variable["name"])[
-                        "defaultConfiguration"
-                    ]
-                )
-
-            # Write configuration
-            with open(path, "w") as f:
-                json.dump(configuration, f, indent=2)
-
-            print(f"  - Reset [bold]{path.stem}[/bold] values to default")
-        else:
-            # Delete any non-default  spaces
-            os.remove(path)
-            print(f"  - Removed [bold]{path.stem}[/bold]")
-
-    # Apply relationships
-    # Load default algorithm relationships
-    print("[bold]=>[/bold] Executing relationships")
-
-    with open(f"{ALGORITHMS_PATH}/{get_default_algorithm()}.json", "r") as f:
-        relationships = json.load(f)["relationships"]
-
-    # Execute all relationships in order
-    for relationship in relationships:
-        execute_relationship(
-            variable_name=relationship["source"],
-            configuration_name=get_default_run(),
-        )
-        print(
-            f'  - Executed relationship for [bold]{relationship["source"]}'
-            "[/bold]"
-        )
-
-    print("[bold]=>[/bold] Done!")
+    # Remove all run references from datapackage.json
+    with open(datapackage_path.format(base_path=DATAPACKAGE_PATH), "r+") as f:
+        datapackage = json.load(f)
+        datapackage["runs"] = []
+        f.seek(0)
+        json.dump(datapackage, f, indent=2)
+        f.truncate()
 
 
 if __name__ == "__main__":
