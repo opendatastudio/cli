@@ -23,8 +23,8 @@ from opendatapy.datapackage import (
     load_run_configuration,
     write_run_configuration,
     load_algorithm,
-    view_artefacts_path,
-    datapackage_path,
+    VIEW_ARTEFACTS_DIR,
+    DATAPACKAGE_FILE,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -355,7 +355,7 @@ def view(
     matplotlib.use("WebAgg")
 
     with open(
-        view_artefacts_path.format(
+        VIEW_ARTEFACTS_DIR.format(
             base_path=DATAPACKAGE_PATH, run_name=run_name
         )
         + f"/{view_name}.p",
@@ -608,7 +608,7 @@ def reset():
             shutil.rmtree(f.path)
 
     # Remove all run references from datapackage.json
-    with open(datapackage_path.format(base_path=DATAPACKAGE_PATH), "r+") as f:
+    with open(DATAPACKAGE_FILE.format(base_path=DATAPACKAGE_PATH), "r+") as f:
         datapackage = json.load(f)
         datapackage["runs"] = []
         f.seek(0)
