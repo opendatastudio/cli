@@ -158,6 +158,7 @@ def init(
     # Create run directory
     run_dir = f"{DATAPACKAGE_PATH}/{algorithm_name}.run"
     os.makedirs(f"{run_dir}/resources")
+    os.makedirs(f"{run_dir}/views")
     print(f"[bold]=>[/bold] Created run directory: {run_dir}")
 
     algorithm = load_algorithm(algorithm_name, base_path=DATAPACKAGE_PATH)
