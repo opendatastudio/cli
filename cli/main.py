@@ -24,8 +24,7 @@ from opendatapy.datapackage import (
     load_run_configuration,
     write_run_configuration,
     load_algorithm,
-    view_file_path,
-    get_algorithm_name,
+    view_artefacts_path,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -360,11 +359,10 @@ def view(
     matplotlib.use("WebAgg")
 
     with open(
-        view_file_path.format(
-            base_path=DATAPACKAGE_PATH,
-            algorithm_name=get_algorithm_name(run_name),
-            view_file_name=f"{view_name}.p",
-        ),
+        view_artefacts_path.format(
+            base_path=DATAPACKAGE_PATH, run_name=run_name
+        )
+        + f"/{view_name}.p",
         "rb",
     ) as f:
         # NOTE: The matplotlib version in CLI must be >= the version of
