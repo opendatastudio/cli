@@ -68,7 +68,9 @@ def get_default_run() -> str | None:
 
 def get_default_algorithm() -> str:
     """Return the default algorithm for the current datapackage"""
-    load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["algorithms"][0]
+    return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)[
+        "algorithms"
+    ][0]
 
 
 def execute_relationship(run_name: str, variable_name: str) -> None:
