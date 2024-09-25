@@ -22,9 +22,10 @@ from opendatapy.datapackage import (
     write_resource,
     load_run_configuration,
     write_run_configuration,
+    load_datapackage_configuration,
+    write_datapackage_configuration,
     load_algorithm,
     VIEW_ARTEFACTS_DIR,
-    DATAPACKAGE_FILE,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -59,17 +60,15 @@ def dumb_str_to_type(value) -> Any:
 
 def get_default_run() -> str | None:
     """Return the default configuration for the current datapackage"""
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        try:
-            return json.load(f)["runs"][0]
-        except IndexError:
-            return None
+    try:
+        load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["runs"][0]
+    except IndexError:
+        return None
 
 
 def get_default_algorithm() -> str:
     """Return the default algorithm for the current datapackage"""
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        return json.load(f)["algorithms"][0]
+    load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["algorithms"][0]
 
 
 def execute_relationship(run_name: str, variable_name: str) -> None:
@@ -204,12 +203,9 @@ def init(
     )
 
     # Add default run to datapackage.json
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r+") as f:
-        datapackage = json.load(f)
-        datapackage["runs"].append(run["name"])
-        f.seek(0)
-        json.dump(datapackage, f, indent=2)
-        f.truncate()
+    datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
+    datapackage["runs"].append(run["name"])
+    write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
 
     # Execute all relationships in order
     for relationship in algorithm["relationships"]:
@@ -608,12 +604,9 @@ def reset():
             shutil.rmtree(f.path)
 
     # Remove all run references from datapackage.json
-    with open(DATAPACKAGE_FILE.format(base_path=DATAPACKAGE_PATH), "r+") as f:
-        datapackage = json.load(f)
-        datapackage["runs"] = []
-        f.seek(0)
-        json.dump(datapackage, f, indent=2)
-        f.truncate()
+    datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
+    datapackage["runs"] = []
+    write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
 
 
 if __name__ == "__main__":
