@@ -1,4 +1,5 @@
 import os
+import shutil
 import json
 import pickle
 import typer
@@ -6,8 +7,6 @@ import docker
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import ntpath
-from pathlib import Path
 from ast import literal_eval
 from typing import Optional, Any
 from typing_extensions import Annotated
@@ -21,8 +20,12 @@ from opendatapy.datapackage import (
     execute_view,
     load_resource_by_variable,
     write_resource,
-    load_configuration,
-    write_configuration,
+    load_run_configuration,
+    write_run_configuration,
+    load_datapackage_configuration,
+    write_datapackage_configuration,
+    load_algorithm,
+    VIEW_ARTEFACTS_DIR,
 )
 from opendatapy.helpers import find_by_name, find
 
@@ -36,10 +39,6 @@ client = docker.from_env()
 # Assume we are always at the datapackage root
 # TODO: Validate we actually are, and that this is a datapackage
 DATAPACKAGE_PATH = os.getcwd()
-RESOURCES_PATH = DATAPACKAGE_PATH + "/resources"
-ALGORITHMS_PATH = DATAPACKAGE_PATH + "/algorithms"
-CONFIGURATIONS_PATH = DATAPACKAGE_PATH + "/configurations"
-VIEWS_PATH = DATAPACKAGE_PATH + "/views"
 
 
 # Helpers
@@ -59,24 +58,27 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def get_default_configuration() -> str:
+def get_default_run() -> str:
     """Return the default configuration for the current datapackage"""
-    with open(f"{DATAPACKAGE_PATH}/datapackage.json", "r") as f:
-        return json.load(f)["defaultConfiguration"]
+    return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["runs"][
+        0
+    ]
 
 
 def get_default_algorithm() -> str:
     """Return the default algorithm for the current datapackage"""
-    return get_default_configuration().split(".")[0]
+    return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)[
+        "algorithms"
+    ][0]
 
 
-def execute_relationship(variable_name: str, configuration_name: str) -> None:
+def execute_relationship(run_name: str, variable_name: str) -> None:
     """Execute any relationships applied to the given source variable"""
-    # Load configuration for modification
-    configuration = load_configuration(configuration_name)
+    # Load run configuration for modification
+    run = load_run_configuration(run_name)
 
     # Load associated relationship
-    with open(f"{ALGORITHMS_PATH}/{get_default_algorithm()}.json", "r") as f:
+    with open(f"{get_default_algorithm()}/algorithm.json", "r") as f:
         relationship = find(
             json.load(f)["relationships"], "source", variable_name
         )
@@ -84,10 +86,10 @@ def execute_relationship(variable_name: str, configuration_name: str) -> None:
     # Apply relationship rules
     for rule in relationship["rules"]:
         if rule["type"] == "value":
-            # Check if this rule applies to current configuration state
+            # Check if this rule applies to current run configuration state
 
             # Get source variable value
-            value = find_by_name(configuration["data"], variable_name)["value"]
+            value = find_by_name(run["data"], variable_name)["value"]
 
             # If the source variable value matches the rule value, execute
             # the relationship
@@ -96,15 +98,15 @@ def execute_relationship(variable_name: str, configuration_name: str) -> None:
                     if "disabled" in target:
                         # Set target variable disabled value
                         target_variable = find_by_name(
-                            configuration["data"], target["name"]
+                            run["data"], target["name"]
                         )
                         target_variable["disabled"] = target["disabled"]
 
                     if target["type"] == "resource":
                         # Set target resource data
                         target_resource = load_resource_by_variable(
+                            run_name=run["name"],
                             variable_name=target["name"],
-                            configuration_name=configuration["name"],
                             base_path=DATAPACKAGE_PATH,
                             as_dict=True,
                         )
@@ -112,12 +114,14 @@ def execute_relationship(variable_name: str, configuration_name: str) -> None:
                         target_resource["data"] = target["data"]
 
                         write_resource(
-                            target_resource, base_path=DATAPACKAGE_PATH
+                            run_name=run["name"],
+                            resource=target_resource,
+                            base_path=DATAPACKAGE_PATH,
                         )
                     elif target["type"] == "value":
                         # Set target variable value
                         target_variable = find_by_name(
-                            configuration["data"], target["name"]
+                            run["data"], target["name"]
                         )
                         target_variable["value"] = target["value"]
                     else:
@@ -131,32 +135,116 @@ def execute_relationship(variable_name: str, configuration_name: str) -> None:
         else:
             raise NotImplementedError("Only value-based rules are implemented")
 
-    # Write modified configuration
-    write_configuration(configuration, base_path=DATAPACKAGE_PATH)
+    # Write modified run configuration
+    write_run_configuration(run, base_path=DATAPACKAGE_PATH)
 
 
 # Commands
 
 
 @app.command()
-def run(
-    configuration_name: Annotated[
+def init(
+    algorithm_name: Annotated[
         Optional[str],
-        typer.Argument(help="The name of the configuration to run"),
-    ] = get_default_configuration(),
+        typer.Argument(help="The name of the algorithm to initialise"),
+    ] = get_default_algorithm(),
+) -> None:
+    """Initialise a datapackage algorithm run"""
+    # Create run directory
+    run_dir = f"{DATAPACKAGE_PATH}/{algorithm_name}.run"
+    os.makedirs(f"{run_dir}/resources")
+    os.makedirs(f"{run_dir}/views")
+    print(f"[bold]=>[/bold] Created run directory: {run_dir}")
+
+    algorithm = load_algorithm(algorithm_name, base_path=DATAPACKAGE_PATH)
+
+    # Generate default run configuration
+    run = {
+        "name": "bindfit.run",
+        "title": f"Default run configuration for {algorithm_name} algorithm",
+        "profile": "opends-run",
+        "algorithm": f"{algorithm_name}",
+        "container": f'{algorithm["container"]}',
+        "data": [],
+    }
+
+    for variable in algorithm["signature"]:
+        # Add variable defaults to run configuration
+        run["data"].append(
+            {
+                "name": variable["name"],
+                **variable["default"],
+            }
+        )
+
+        # Initialise associated resources
+        if variable["type"] == "resource":
+            resource = {
+                "name": variable["default"]["resource"],
+                "title": variable["title"],
+                "description": variable["description"],
+                "profile": variable["profile"],
+                "schema": variable.get("schema", {}),
+                "data": [],
+            }
+
+            write_resource(
+                run_name=run["name"],
+                resource=resource,
+                base_path=DATAPACKAGE_PATH,
+            )
+
+            print(f"[bold]=>[/bold] Generated resource: {resource['name']}")
+
+    # Write generated configuration
+    write_run_configuration(run, base_path=DATAPACKAGE_PATH)
+
+    print(
+        f"[bold]=>[/bold] Generated default run configuration: {run['name']}"
+    )
+
+    # Add default run to datapackage.json
+    datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
+    datapackage["runs"].append(run["name"])
+    write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
+
+    # Execute all relationships in order
+    for relationship in algorithm["relationships"]:
+        execute_relationship(
+            run_name=run["name"],
+            variable_name=relationship["source"],
+        )
+        print(
+            f"[bold]=>[/bold] Executed relationship for variable [bold]"
+            f'{relationship["source"]}[/bold]'
+        )
+
+    # TODO: Remove configurations from datapackage on reset
+    # TODO: Create DatapackageClient for interacting with datapackages in
+    # opendatapy - should do all the tasks the CLI does
+
+
+@app.command()
+def run(
+    run_name: Annotated[
+        Optional[str],
+        typer.Argument(help="The name of the run to execute"),
+    ] = None,
 ) -> None:
     """Run the specified configuration"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Execute algorithm container and print any logs
-    print(f"[bold]=>[/bold] Executing [bold]{configuration_name}[/bold]")
+    print(f"[bold]=>[/bold] Executing [bold]{run_name}[/bold]")
 
     try:
         logs = execute_datapackage(
             client,
-            configuration_name,
+            run_name,
             base_path=DATAPACKAGE_PATH,
         )
     except ExecutionError as e:
-        print(type(e.logs))
         print(
             Panel(
                 e.logs,
@@ -174,10 +262,7 @@ def run(
             )
         )
 
-    print(
-        f"[bold]=>[/bold] Executed [bold]{configuration_name}[/bold] "
-        "successfully"
-    )
+    print(f"[bold]=>[/bold] Executed [bold]{run_name}[/bold] successfully")
 
 
 @app.command()
@@ -189,23 +274,30 @@ def view_table(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_configuration(),
+    ] = None,
 ) -> None:
     """Print a tabular data variable"""
+    if run_name is None:
+        run_name = get_default_run()
+
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
     if "tabular-data-resource" in resource.profile:
-        print(tabulate(resource.data, headers="keys", tablefmt="github"))
+        print(
+            tabulate(
+                resource.to_dict()["data"], headers="keys", tablefmt="github"
+            )
+        )
     else:
         print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
         exit(1)
@@ -219,12 +311,24 @@ def view(
             help="The name of the view to render", show_default=False
         ),
     ],
+    run_name: Annotated[
+        Optional[str],
+        typer.Argument(help="The name of the run to view"),
+    ] = None,
 ) -> None:
     """Render a view locally"""
+    if run_name is None:
+        run_name = get_default_run()
+
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
     try:
-        logs = execute_view(client, view_name, base_path=DATAPACKAGE_PATH)
+        logs = execute_view(
+            docker_client=client,
+            run_name=run_name,
+            view_name=view_name,
+            base_path=DATAPACKAGE_PATH,
+        )
     except ResourceError as e:
         print("[red]" + e.message + "[/red]")
         exit(1)
@@ -256,7 +360,13 @@ def view(
 
     matplotlib.use("WebAgg")
 
-    with open(f"{VIEWS_PATH}/{view_name}.p", "rb") as f:
+    with open(
+        VIEW_ARTEFACTS_DIR.format(
+            base_path=DATAPACKAGE_PATH, run_name=run_name
+        )
+        + f"/{view_name}.p",
+        "rb",
+    ) as f:
         # NOTE: The matplotlib version in CLI must be >= the version of
         # matplotlib used to generate the plot (which is chosen by the user)
         # So the CLI should be kept up to date at all times
@@ -282,19 +392,22 @@ def load(
             help="Path to data to ingest (xml, csv)", show_default=False
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_configuration(),
+    ] = None,
 ) -> None:
     """Load data into configuration variable"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Load resource into TabularDataResource object
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -303,7 +416,9 @@ def load(
     resource.data = pd.read_csv(path)
 
     # Write to resource
-    write_resource(resource, base_path=DATAPACKAGE_PATH)
+    write_resource(
+        run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+    )
 
     print("[bold]=>[/bold] Resource successfully loaded!")
 
@@ -332,22 +447,25 @@ def set_param(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_configuration(),
+    ] = None,
 ) -> None:
     """Set a parameter value"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Parse value (workaround for Typer not supporting Union types :<)
     param_value = dumb_str_to_type(param_value)
 
     # Load param resource
     resource = load_resource_by_variable(
-        variable_name,
-        configuration_name,
+        run_name=run_name,
+        variable_name=variable_name,
         base_path=DATAPACKAGE_PATH,
     )
 
@@ -386,7 +504,9 @@ def set_param(
         exit(1)
 
     # Write resource
-    write_resource(resource, base_path=DATAPACKAGE_PATH)
+    write_resource(
+        run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+    )
 
     print(
         f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
@@ -412,31 +532,31 @@ def set_var(
             show_default=False,
         ),
     ],
-    configuration_name: Annotated[
+    run_name: Annotated[
         Optional[str],
         typer.Argument(
-            help="Name of target configuration",
+            help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_configuration(),
+    ] = None,
 ) -> None:
     """Set a variable value"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Parse value (workaround for Typer not supporting Union types :<)
     variable_value = dumb_str_to_type(variable_value)
 
-    # Load variable
-    configuration_path = f"{CONFIGURATIONS_PATH}/{configuration_name}.json"
+    # Load algorithum signature
+    signature = find_by_name(
+        load_algorithm(
+            algorithm_name=run_name.split(".")[0],
+            base_path=DATAPACKAGE_PATH,
+        )["signature"],
+        variable_name,
+    )
 
-    with open(configuration_path, "r") as f:
-        configuration = json.load(f)
-
-    # Get algorithm name from configuration
-    algorithm_name = configuration_name.split(".")[0]
-
-    # Load signature
-    with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-        signature = find_by_name(json.load(f)["signature"], variable_name)
-
+    # Convenience dict mapping opends types to Python types
     type_map = {
         "string": str,
         "boolean": bool,
@@ -469,18 +589,19 @@ def set_var(
             print("[red]Variable value cannot be null[/red]")
             exit(1)
 
-    # Set value
-    find_by_name(configuration["data"], variable_name)[
-        "value"
-    ] = variable_value
+    # Load run configuration
+    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+
+    # Set variable value
+    find_by_name(run["data"], variable_name)["value"] = variable_value
 
     # Write configuration
-    with open(configuration_path, "w") as f:
-        json.dump(configuration, f, indent=2)
+    write_run_configuration(run, base_path=DATAPACKAGE_PATH)
 
-    # Execute any applicable relationships
+    # Execute any relationships applied to this variable value
     execute_relationship(
-        variable_name=variable_name, configuration_name=configuration_name
+        run_name=run_name,
+        variable_name=variable_name,
     )
 
     print(
@@ -495,104 +616,16 @@ def reset():
 
     Removes all run outputs and resets configurations to default
     """
-    # Remove all data and schemas from (parameter-)tabular-data-resources
-    print("[bold]=>[/bold] Checking tabular data resources")
-    resource_pathlist = Path(RESOURCES_PATH).rglob("*.json")
+    # Remove all run directories
+    for f in os.scandir(DATAPACKAGE_PATH):
+        if f.is_dir() and f.path.endswith(".run"):
+            print(f"[bold]=>[/bold] Deleting [bold]{f.name}[/bold]")
+            shutil.rmtree(f.path)
 
-    for path in resource_pathlist:
-        with open(path, "r") as f:
-            resource_obj = json.load(f)
-
-        if resource_obj["profile"] == "parameter-tabular-data-resource":
-            # Don't reset schema for parameter-tabulra-data-resources
-            if resource_obj["data"]:
-                print(
-                    "  - Resetting parameter resource [bold]"
-                    f"{resource_obj['name']}[/bold]"
-                )
-                resource_obj["data"] = []
-        elif resource_obj["profile"] == "tabular-data-resource":
-            if resource_obj["data"] or resource_obj["schema"]:
-                print(
-                    f"  - Resetting resource [bold]{resource_obj['name']}"
-                    "[/bold]"
-                )
-                resource_obj["data"] = []
-                resource_obj["schema"] = {}
-        else:
-            print(
-                f"[red]Unable to reset resource [bold]{resource_obj['name']}"
-                "[/bold] with unrecognised resource profile [bold]"
-                f"{resource_obj['profile']}[/bold][/red]"
-            )
-            exit(1)
-
-        with open(path, "w") as f:
-            json.dump(resource_obj, f, indent=2)
-
-    # Remove view render artefacts - .png, .p
-    print("[bold]=>[/bold] Checking view artefacts")
-    for file in os.scandir(VIEWS_PATH):
-        if file.path.endswith(".png") or file.path.endswith(".p"):
-            print(f"  - Removed {ntpath.basename(file.path)}")
-            os.remove(file.path)
-
-    print("[bold]=>[/bold] Checking variables in configuration")
-    configurations_pathlist = Path(CONFIGURATIONS_PATH).rglob("*.json")
-
-    # Remove all non-default configurations and reset to defaults from
-    # algorithm signature
-    for path in configurations_pathlist:
-        if path.stem.endswith("default"):
-            # Keep the default configuration, reset values to defaults
-            # Load configuration
-            with open(path, "r") as f:
-                configuration = json.load(f)
-
-            # Get algorithm name to determine which algorithm signature to load
-            algorithm_name = str(path.stem).split(".")[0]
-
-            # Load algorithm signature for this configuration
-            with open(f"{ALGORITHMS_PATH}/{algorithm_name}.json", "r") as f:
-                signature = json.load(f)["signature"]
-
-            for variable in configuration["data"]:
-                # Reset variables to default values from signature
-                variable.update(
-                    find_by_name(signature, variable["name"])[
-                        "defaultConfiguration"
-                    ]
-                )
-
-            # Write configuration
-            with open(path, "w") as f:
-                json.dump(configuration, f, indent=2)
-
-            print(f"  - Reset [bold]{path.stem}[/bold] values to default")
-        else:
-            # Delete any non-default  spaces
-            os.remove(path)
-            print(f"  - Removed [bold]{path.stem}[/bold]")
-
-    # Apply relationships
-    # Load default algorithm relationships
-    print("[bold]=>[/bold] Executing relationships")
-
-    with open(f"{ALGORITHMS_PATH}/{get_default_algorithm()}.json", "r") as f:
-        relationships = json.load(f)["relationships"]
-
-    # Execute all relationships in order
-    for relationship in relationships:
-        execute_relationship(
-            variable_name=relationship["source"],
-            configuration_name=get_default_configuration(),
-        )
-        print(
-            f'  - Executed relationship for [bold]{relationship["source"]}'
-            "[/bold]"
-        )
-
-    print("[bold]=>[/bold] Done!")
+    # Remove all run references from datapackage.json
+    datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
+    datapackage["runs"] = []
+    write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
 
 
 if __name__ == "__main__":
