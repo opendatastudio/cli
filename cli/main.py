@@ -58,12 +58,11 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def get_default_run() -> str | None:
+def get_default_run() -> str:
     """Return the default configuration for the current datapackage"""
-    try:
-        load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["runs"][0]
-    except IndexError:
-        return None
+    return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["runs"][
+        0
+    ]
 
 
 def get_default_algorithm() -> str:
@@ -230,9 +229,12 @@ def run(
     run_name: Annotated[
         Optional[str],
         typer.Argument(help="The name of the run to execute"),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Run the specified configuration"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Execute algorithm container and print any logs
     print(f"[bold]=>[/bold] Executing [bold]{run_name}[/bold]")
 
@@ -278,9 +280,12 @@ def view_table(
             help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Print a tabular data variable"""
+    if run_name is None:
+        run_name = get_default_run()
+
     resource = load_resource_by_variable(
         run_name=run_name,
         variable_name=variable_name,
@@ -309,9 +314,12 @@ def view(
     run_name: Annotated[
         Optional[str],
         typer.Argument(help="The name of the run to view"),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Render a view locally"""
+    if run_name is None:
+        run_name = get_default_run()
+
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
     try:
@@ -390,9 +398,12 @@ def load(
             help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Load data into configuration variable"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Load resource into TabularDataResource object
     resource = load_resource_by_variable(
         run_name=run_name,
@@ -442,9 +453,12 @@ def set_param(
             help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Set a parameter value"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Parse value (workaround for Typer not supporting Union types :<)
     param_value = dumb_str_to_type(param_value)
 
@@ -524,9 +538,12 @@ def set_var(
             help="Name of target run",
             show_default=True,
         ),
-    ] = get_default_run(),
+    ] = None,
 ) -> None:
     """Set a variable value"""
+    if run_name is None:
+        run_name = get_default_run()
+
     # Parse value (workaround for Typer not supporting Union types :<)
     variable_value = dumb_str_to_type(variable_value)
 
