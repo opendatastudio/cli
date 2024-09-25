@@ -1,9 +1,9 @@
-# `ods`
+# `opends`
 
 **Usage**:
 
 ```console
-$ ods [OPTIONS] COMMAND [ARGS]...
+$ opends [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Options**:
@@ -14,6 +14,7 @@ $ ods [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
+* `init`: Initialise a datapackage algorithm run
 * `load`: Load data into configuration variable
 * `reset`: Reset datapackage to clean state
 * `run`: Run the specified configuration
@@ -22,27 +23,45 @@ $ ods [OPTIONS] COMMAND [ARGS]...
 * `view`: Render a view locally
 * `view-table`: Print a tabular data variable
 
-## `ods load`
+## `opends init`
+
+Initialise a datapackage algorithm run
+
+**Usage**:
+
+```console
+$ opends init [OPTIONS] [ALGORITHM_NAME]
+```
+
+**Arguments**:
+
+* `[ALGORITHM_NAME]`: The name of the algorithm to initialise  [default: [default_algorithm_name]]
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+## `opends load`
 
 Load data into configuration variable
 
 **Usage**:
 
 ```console
-$ ods load [OPTIONS] VARIABLE_NAME PATH [CONFIGURATION_NAME]
+$ opends load [OPTIONS] VARIABLE_NAME PATH [RUN_NAME]
 ```
 
 **Arguments**:
 
 * `VARIABLE_NAME`: Name of variable to populate  [required]
 * `PATH`: Path to data to ingest (xml, csv)  [required]
-* `[CONFIGURATION_NAME]`: Name of target configuration  [default: [default_algorithm_name].default]
+* `[RUN_NAME]`: Name of target run
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods reset`
+## `opends reset`
 
 Reset datapackage to clean state
 
@@ -51,39 +70,39 @@ Removes all run outputs and resets configurations to default
 **Usage**:
 
 ```console
-$ ods reset [OPTIONS]
+$ opends reset [OPTIONS]
 ```
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods run`
+## `opends run`
 
 Run the specified configuration
 
 **Usage**:
 
 ```console
-$ ods run [OPTIONS] [CONFIGURATION_NAME]
+$ opends run [OPTIONS] [RUN_NAME]
 ```
 
 **Arguments**:
 
-* `[CONFIGURATION_NAME]`: The name of the configuration to run  [default: [default_algorithm_name].default]
+* `[RUN_NAME]`: The name of the run to execute
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods set-param`
+## `opends set-param`
 
 Set a parameter value
 
 **Usage**:
 
 ```console
-$ ods set-param [OPTIONS] VARIABLE_NAME PARAM_NAME PARAM_VALUE [CONFIGURATION_NAME]
+$ opends set-param [OPTIONS] VARIABLE_NAME PARAM_NAME PARAM_VALUE [RUN_NAME]
 ```
 
 **Arguments**:
@@ -91,64 +110,65 @@ $ ods set-param [OPTIONS] VARIABLE_NAME PARAM_NAME PARAM_VALUE [CONFIGURATION_NA
 * `VARIABLE_NAME`: Name of parameter variable to populate  [required]
 * `PARAM_NAME`: Name of parameter to set  [required]
 * `PARAM_VALUE`: Value to set  [required]
-* `[CONFIGURATION_NAME]`: Name of target configuration  [default: [default_algorithm_name].default]
+* `[RUN_NAME]`: Name of target run
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods set-var`
+## `opends set-var`
 
 Set a variable value
 
 **Usage**:
 
 ```console
-$ ods set-var [OPTIONS] VARIABLE_NAME VARIABLE_VALUE [CONFIGURATION_NAME]
+$ opends set-var [OPTIONS] VARIABLE_NAME VARIABLE_VALUE [RUN_NAME]
 ```
 
 **Arguments**:
 
 * `VARIABLE_NAME`: Name of variable to set  [required]
 * `VARIABLE_VALUE`: Value to set  [required]
-* `[CONFIGURATION_NAME]`: Name of target configuration  [default: [default_algorithm_name].default]
+* `[RUN_NAME]`: Name of target run
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods view`
+## `opends view`
 
 Render a view locally
 
 **Usage**:
 
 ```console
-$ ods view [OPTIONS] VIEW_NAME
+$ opends view [OPTIONS] VIEW_NAME [RUN_NAME]
 ```
 
 **Arguments**:
 
 * `VIEW_NAME`: The name of the view to render  [required]
+* `[RUN_NAME]`: The name of the run to view
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `ods view-table`
+## `opends view-table`
 
 Print a tabular data variable
 
 **Usage**:
 
 ```console
-$ ods view-table [OPTIONS] VARIABLE_NAME [CONFIGURATION_NAME]
+$ opends view-table [OPTIONS] VARIABLE_NAME [RUN_NAME]
 ```
 
 **Arguments**:
 
 * `VARIABLE_NAME`: Name of variable to view  [required]
-* `[CONFIGURATION_NAME]`: Name of target configuration  [default: [default_algorithm_name].default]
+* `[RUN_NAME]`: Name of target run
 
 **Options**:
 

@@ -22,5 +22,5 @@ pip install -e [/path/to/cli]
 
 You can now run the CLI script with:
 ```
-ods
+opends
 ```

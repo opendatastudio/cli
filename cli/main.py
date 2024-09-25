@@ -481,7 +481,7 @@ def set_param(
     if not resource:
         print(
             f'[red]Parameter resource [bold]{resource.name}[/bold] "data" '
-            'field is empty. Try running "ods reset"?[/red]'
+            'field is empty. Try running "opends reset"?[/red]'
         )
         exit(1)
 
