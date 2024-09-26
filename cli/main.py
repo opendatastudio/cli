@@ -18,6 +18,7 @@ from opendatapy.datapackage import (
     ResourceError,
     execute_datapackage,
     execute_view,
+    init_resource,
     load_resource_by_variable,
     write_resource,
     load_run_configuration,
@@ -103,7 +104,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         target_variable["disabled"] = target["disabled"]
 
                     if target["type"] == "resource":
-                        # Set target resource data
+                        # Set target resource data and schema
                         target_resource = load_resource_by_variable(
                             run_name=run["name"],
                             variable_name=target["name"],
@@ -111,7 +112,11 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                             as_dict=True,
                         )
 
-                        target_resource["data"] = target["data"]
+                        if target.get("data") is not None:
+                            target_resource["data"] = target["data"]
+
+                        if target.get("schema") is not None:
+                            target_resource["schema"] = target["schema"]
 
                         write_resource(
                             run_name=run["name"],
@@ -179,22 +184,15 @@ def init(
 
         # Initialise associated resources
         if variable["type"] == "resource":
-            resource = {
-                "name": variable["default"]["resource"],
-                "title": variable["title"],
-                "description": variable["description"],
-                "profile": variable["profile"],
-                "schema": variable.get("schema", {}),
-                "data": [],
-            }
+            resource_name = variable["default"]["resource"]
 
-            write_resource(
+            init_resource(
                 run_name=run["name"],
-                resource=resource,
+                resource_name=resource_name,
                 base_path=DATAPACKAGE_PATH,
             )
 
-            print(f"[bold]=>[/bold] Generated resource: {resource['name']}")
+            print(f"[bold]=>[/bold] Generated resource: {resource_name}")
 
     # Write generated configuration
     write_run_configuration(run, base_path=DATAPACKAGE_PATH)
@@ -218,10 +216,6 @@ def init(
             f"[bold]=>[/bold] Executed relationship for variable [bold]"
             f'{relationship["source"]}[/bold]'
         )
-
-    # TODO: Remove configurations from datapackage on reset
-    # TODO: Create DatapackageClient for interacting with datapackages in
-    # opendatapy - should do all the tasks the CLI does
 
 
 @app.command()
