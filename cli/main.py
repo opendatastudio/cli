@@ -342,33 +342,52 @@ def run() -> None:
 
 
 @app.command()
-def view_table(
+def show(
     variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of variable to view",
+            help="Name of variable to print",
             show_default=False,
         ),
     ],
 ) -> None:
-    """Print a tabular data variable"""
+    """Print a variable value"""
     run_name = get_active_run()
 
-    resource = load_resource_by_variable(
-        run_name=run_name,
-        variable_name=variable_name,
-        base_path=DATAPACKAGE_PATH,
+    # Load algorithum signature to check variable type
+    signature = find_by_name(
+        load_algorithm(
+            algorithm_name=get_algorithm_name(run_name),
+            base_path=DATAPACKAGE_PATH,
+        )["signature"],
+        variable_name,
     )
 
-    if "tabular-data-resource" in resource.profile:
+    if signature["type"] == "resource":
+        # Variable is a tabular data resource
+        resource = load_resource_by_variable(
+            run_name=run_name,
+            variable_name=variable_name,
+            base_path=DATAPACKAGE_PATH,
+        )
+
         print(
             tabulate(
-                resource.to_dict()["data"], headers="keys", tablefmt="github"
+                resource.to_dict()["data"],
+                headers="keys",
+                tablefmt="rounded_grid",
             )
         )
     else:
-        print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
-        exit(1)
+        # Variable is a simple string/number/bool value
+        run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+        print(
+            Panel(
+                str(find_by_name(run["data"], variable_name)["value"]),
+                title=f"{variable_name}",
+                expand=False,
+            )
+        )
 
 
 @app.command()
@@ -647,40 +666,6 @@ def set_var(
         f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
         "variable"
     )
-
-
-@app.command()
-def get_var(
-    variable_name: Annotated[
-        str,
-        typer.Argument(
-            help="Name of variable to set",
-            show_default=False,
-        ),
-    ],
-) -> None:
-    """Print a variable value"""
-    run_name = get_active_run()
-
-    # Load algorithum signature
-    signature = find_by_name(
-        load_algorithm(
-            algorithm_name=get_algorithm_name(run_name),
-            base_path=DATAPACKAGE_PATH,
-        )["signature"],
-        variable_name,
-    )
-
-    # Check we can print the value here and raise some helpful errors
-    if signature.get(
-        "profile"
-    ) is not None and "tabular-data-resource" in signature.get("profile"):
-        print('[red]Use command "view-table" for tabular data resources[/red]')
-        exit(1)
-
-    # Get value from run configuration
-    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
-    print(find_by_name(run["data"], variable_name)["value"])
 
 
 @app.command()
