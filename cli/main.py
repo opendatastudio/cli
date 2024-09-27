@@ -1,4 +1,5 @@
 import os
+import time
 import shutil
 import json
 import re
@@ -27,6 +28,7 @@ from opendatapy.datapackage import (
     load_datapackage_configuration,
     write_datapackage_configuration,
     load_algorithm,
+    write_algorithm,
     get_algorithm_name,
     RUN_DIR,
     VIEW_ARTEFACTS_DIR,
@@ -701,6 +703,93 @@ def reset():
     # Remove CLI config
     if os.path.exists(CONFIG_FILE):
         os.remove(CONFIG_FILE)
+
+
+@app.command()
+def new(
+    algorithm_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of the algorithm to generate",
+            show_default=False,
+        ),
+    ],
+) -> None:
+    """Generate a new datapackage and algorithm scaffold"""
+    # Create new datapackage directory
+    datapackage_name = f"{algorithm_name}-datapackage"
+    datapackage_dir = f"{DATAPACKAGE_PATH}/{datapackage_name}"
+    algorithm_dir = f"{datapackage_dir}/{algorithm_name}"
+
+    if not os.path.exists(datapackage_dir):
+        os.makedirs(datapackage_dir)
+        os.makedirs(algorithm_dir)
+    else:
+        print(
+            f'[red]Directory named "{datapackage_name}" already exists[/red]'
+        )
+        exit(1)
+
+    current_time = int(time.time())
+
+    datapackage = {
+        "title": "New datapackage",
+        "description": "A new datapackage",
+        "profile": "opends-analysis-datapackage",
+        "algorithms": [algorithm_name],
+        "runs": [],
+        "repository": {
+            "type": "git",
+            "url": "https://github.com/opendatastudio/example-datapackage",
+            "name": "opendatastudio/example-datapackage",
+        },
+        "created": current_time,
+        "updated": current_time,
+    }
+
+    algorithm = {
+        "name": algorithm_name,
+        "title": "New algorithm",
+        "profile": "opends-algorithm",
+        "code": "algorithm.py",
+        "container": "opends/python-run-base:v1",
+        "signature": [
+            {
+                "name": "input",
+                "title": "Input",
+                "description": "An input variable",
+                "type": "number",
+                "null": False,
+                "default": {"value": 42},
+            },
+            {
+                "name": "output",
+                "title": "Output",
+                "description": "An output variable",
+                "type": "number",
+                "null": True,
+                "default": {"value": None},
+            },
+        ],
+        "relationships": [],
+    }
+
+    algorithm_code = '''def main(input, output):
+    """A new algorithm"""
+
+    return {
+        "output": input**2,
+    }
+    '''
+
+    write_datapackage_configuration(datapackage, base_path=datapackage_dir)
+    write_algorithm(algorithm, base_path=datapackage_dir)
+    with open(f"{datapackage_dir}/{algorithm_name}/algorithm.py", "x") as f:
+        f.write(algorithm_code)
+
+    print(
+        f"[bold]=>[/bold] Successfully created [bold]{datapackage_name}[/bold]"
+    )
 
 
 if __name__ == "__main__":
