@@ -665,7 +665,8 @@ def reset():
     write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
 
     # Remove CLI config
-    os.remove(CONFIG_FILE)
+    if os.path.exists(CONFIG_FILE):
+        os.remove(CONFIG_FILE)
 
 
 if __name__ == "__main__":
