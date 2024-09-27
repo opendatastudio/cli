@@ -342,33 +342,52 @@ def run() -> None:
 
 
 @app.command()
-def view_table(
+def show(
     variable_name: Annotated[
         str,
         typer.Argument(
-            help="Name of variable to view",
+            help="Name of variable to print",
             show_default=False,
         ),
     ],
 ) -> None:
-    """Print a tabular data variable"""
+    """Print a variable value"""
     run_name = get_active_run()
 
-    resource = load_resource_by_variable(
-        run_name=run_name,
-        variable_name=variable_name,
-        base_path=DATAPACKAGE_PATH,
+    # Load algorithum signature to check variable type
+    signature = find_by_name(
+        load_algorithm(
+            algorithm_name=get_algorithm_name(run_name),
+            base_path=DATAPACKAGE_PATH,
+        )["signature"],
+        variable_name,
     )
 
-    if "tabular-data-resource" in resource.profile:
+    if signature["type"] == "resource":
+        # Variable is a tabular data resource
+        resource = load_resource_by_variable(
+            run_name=run_name,
+            variable_name=variable_name,
+            base_path=DATAPACKAGE_PATH,
+        )
+
         print(
             tabulate(
-                resource.to_dict()["data"], headers="keys", tablefmt="github"
+                resource.to_dict()["data"],
+                headers="keys",
+                tablefmt="rounded_grid",
             )
         )
     else:
-        print(f"[red]Can't view non-tabular resource {resource['name']}[/red]")
-        exit(1)
+        # Variable is a simple string/number/bool value
+        run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+        print(
+            Panel(
+                str(find_by_name(run["data"], variable_name)["value"]),
+                title=f"{variable_name}",
+                expand=False,
+            )
+        )
 
 
 @app.command()
@@ -479,95 +498,14 @@ def load(
 
 
 @app.command()
-def set_param(
-    variable_name: Annotated[
+def set(
+    variable_ref: Annotated[
         str,
         typer.Argument(
-            help="Name of parameter variable to populate",
-            show_default=False,
-        ),
-    ],
-    param_name: Annotated[
-        str,
-        typer.Argument(
-            help="Name of parameter to set",
-            show_default=False,
-        ),
-    ],
-    param_value: Annotated[
-        str,  # Workaround for union types not being supported by Typer yet
-        # Union[str, int, float, bool],
-        typer.Argument(
-            help="Value to set",
-            show_default=False,
-        ),
-    ],
-) -> None:
-    """Set a parameter value"""
-    run_name = get_active_run()
-
-    # Parse value (workaround for Typer not supporting Union types :<)
-    param_value = dumb_str_to_type(param_value)
-
-    # Load param resource
-    resource = load_resource_by_variable(
-        run_name=run_name,
-        variable_name=variable_name,
-        base_path=DATAPACKAGE_PATH,
-    )
-
-    # Check it's a param resource
-    if resource.profile != "parameter-tabular-data-resource":
-        print(
-            f"[red]Resource [bold]{resource.name}[/bold] is not of type "
-            '"parameters"[/red]'
-        )
-        exit(1)
-
-    # If data is not populated, something has gone wrong
-    if not resource:
-        print(
-            f'[red]Parameter resource [bold]{resource.name}[/bold] "data" '
-            'field is empty. Try running "opends reset"?[/red]'
-        )
-        exit(1)
-
-    print(
-        f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
-        f"value [bold]{param_value}[/bold]"
-    )
-
-    # Set parameter value (initial guess)
-    try:
-        # This will generate a key error if param_name doesn't exist
-        # The assignment doesn't unfortunately
-        resource.data.loc[param_name]  # Ensure param_name row exists
-        resource.data.loc[param_name, "init"] = param_value
-    except KeyError:
-        print(
-            f'[red]Could not find parameter "{param_name}" in resource '
-            f"[bold]{resource.name}[/bold][/red]"
-        )
-        exit(1)
-
-    # Write resource
-    write_resource(
-        run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
-    )
-
-    print(
-        f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
-        f"[/bold] value to [bold]{param_value}[/bold] in parameter resource "
-        f"[bold]{resource.name}[/bold]"
-    )
-
-
-@app.command()
-def set_var(
-    variable_name: Annotated[
-        str,
-        typer.Argument(
-            help="Name of variable to set",
+            help=(
+                "Either a variable name, or a parameter reference in the "
+                "format [resource name].[parameter name]"
+            ),
             show_default=False,
         ),
     ],
@@ -586,101 +524,147 @@ def set_var(
     # Parse value (workaround for Typer not supporting Union types :<)
     variable_value = dumb_str_to_type(variable_value)
 
-    # Load algorithum signature
-    signature = find_by_name(
-        load_algorithm(
-            algorithm_name=get_algorithm_name(run_name),
-            base_path=DATAPACKAGE_PATH,
-        )["signature"],
-        variable_name,
-    )
+    if "." in variable_ref:
+        # Variable reference is a parameter reference
 
-    # Convenience dict mapping opends types to Python types
-    type_map = {
-        "string": str,
-        "boolean": bool,
-        "number": float | int,
-    }
+        # Check the variable_ref matches the pattern [resource].[param]
+        pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
 
-    # Check the value is of the expected type for this variable
-    # Raise some helpful errors
-    if signature.get("profile") == "tabular-data-resource":
-        print('[red]Use command "load" for tabular data resource[/red]')
-        exit(1)
-    elif signature.get("profile") == "parameter-tabular-data-resource":
-        print('[red]Use command "set-param" for parameter resource[/red]')
-        exit(1)
-    # Specify False as fallback value here to avoid "None"s leaking through
-    elif type_map.get(signature["type"], False) != type(variable_value):
-        print(f"[red]Variable value must be of type {signature['type']}[/red]")
-        exit(1)
-
-    # If this variable has an enum, check the value is allowed
-    if signature.get("enum", False):
-        allowed_values = [i["value"] for i in signature["enum"]]
-        if variable_value not in allowed_values:
-            print(f"[red]Variable value must be one of {allowed_values}[/red]")
+        if not pattern.match(variable_ref):
+            print(
+                "[red]Variable name argument must be either a variable name "
+                "or a parameter reference in the format "
+                r"\[resource name].\[param name][/red]"
+            )
             exit(1)
 
-    # Check if nullable
-    if not signature["null"]:
-        if not variable_value:
-            print("[red]Variable value cannot be null[/red]")
+        # Parse variable and param names
+        variable_name, param_name = variable_ref.split(".")
+
+        # Load param resource
+        resource = load_resource_by_variable(
+            run_name=run_name,
+            variable_name=variable_name,
+            base_path=DATAPACKAGE_PATH,
+        )
+
+        # Check it's a param resource
+        if resource.profile != "parameter-tabular-data-resource":
+            print(
+                f"[red]Resource [bold]{resource.name}[/bold] is not of type "
+                '"parameters"[/red]'
+            )
             exit(1)
 
-    # Load run configuration
-    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+        # If data is not populated, something has gone wrong
+        if not resource:
+            print(
+                f'[red]Parameter resource [bold]{resource.name}[/bold] "data" '
+                'field is empty. Try running "opends reset"?[/red]'
+            )
+            exit(1)
 
-    # Set variable value
-    find_by_name(run["data"], variable_name)["value"] = variable_value
+        print(
+            f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
+            f"value [bold]{variable_value}[/bold]"
+        )
 
-    # Write configuration
-    write_run_configuration(run, base_path=DATAPACKAGE_PATH)
+        # Set parameter value (initial guess)
+        try:
+            # This will generate a key error if param_name doesn't exist
+            # The assignment doesn't unfortunately
+            resource.data.loc[param_name]  # Ensure param_name row exists
+            resource.data.loc[param_name, "init"] = variable_value
+        except KeyError:
+            print(
+                f'[red]Could not find parameter "{param_name}" in resource '
+                f"[bold]{resource.name}[/bold][/red]"
+            )
+            exit(1)
 
-    # Execute any relationships applied to this variable value
-    execute_relationship(
-        run_name=run_name,
-        variable_name=variable_name,
-    )
+        # Write resource
+        write_resource(
+            run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+        )
 
-    print(
-        f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
-        "variable"
-    )
+        print(
+            f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
+            f"[/bold] value to [bold]{variable_value}[/bold] in parameter "
+            f"resource [bold]{resource.name}[/bold]"
+        )
+    else:
+        # Variable reference is a simple variable name
+        variable_name = variable_ref
 
+        # Load algorithum signature
+        signature = find_by_name(
+            load_algorithm(
+                algorithm_name=get_algorithm_name(run_name),
+                base_path=DATAPACKAGE_PATH,
+            )["signature"],
+            variable_name,
+        )
 
-@app.command()
-def get_var(
-    variable_name: Annotated[
-        str,
-        typer.Argument(
-            help="Name of variable to set",
-            show_default=False,
-        ),
-    ],
-) -> None:
-    """Print a variable value"""
-    run_name = get_active_run()
+        # Convenience dict mapping opends types to Python types
+        type_map = {
+            "string": str,
+            "boolean": bool,
+            "number": float | int,
+        }
 
-    # Load algorithum signature
-    signature = find_by_name(
-        load_algorithm(
-            algorithm_name=get_algorithm_name(run_name),
-            base_path=DATAPACKAGE_PATH,
-        )["signature"],
-        variable_name,
-    )
+        # Check the value is of the expected type for this variable
+        # Raise some helpful errors
+        if signature.get("profile") == "tabular-data-resource":
+            print('[red]Use command "load" for tabular data resource[/red]')
+            exit(1)
+        elif signature.get("profile") == "parameter-tabular-data-resource":
+            print('[red]Use command "set-param" for parameter resource[/red]')
+            exit(1)
+        # Specify False as fallback value here to avoid "None"s leaking through
+        elif type_map.get(signature["type"], False) != type(variable_value):
+            print(
+                f"[red]Variable value must be of type {signature['type']}"
+                "[/red]"
+            )
+            exit(1)
 
-    # Check we can print the value here and raise some helpful errors
-    if signature.get(
-        "profile"
-    ) is not None and "tabular-data-resource" in signature.get("profile"):
-        print('[red]Use command "view-table" for tabular data resources[/red]')
-        exit(1)
+        # If this variable has an enum, check the value is allowed
+        if signature.get("enum", False):
+            allowed_values = [i["value"] for i in signature["enum"]]
+            if variable_value not in allowed_values:
+                print(
+                    f"[red]Variable value must be one of {allowed_values}"
+                    "[/red]"
+                )
+                exit(1)
 
-    # Get value from run configuration
-    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
-    print(find_by_name(run["data"], variable_name)["value"])
+        # Check if nullable
+        if not signature["null"]:
+            if not variable_value:
+                print("[red]Variable value cannot be null[/red]")
+                exit(1)
+
+        # Load run configuration
+        run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+
+        # Set variable value
+        find_by_name(run["data"], variable_name)["value"] = variable_value
+
+        # Write configuration
+        write_run_configuration(run, base_path=DATAPACKAGE_PATH)
+
+        # Execute any relationships applied to this variable value
+        execute_relationship(
+            run_name=run_name,
+            variable_name=variable_name,
+        )
+
+        print(
+            f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
+            "variable"
+        )
+
+    show(variable_name)
 
 
 @app.command()

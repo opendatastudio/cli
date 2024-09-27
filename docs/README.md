@@ -14,28 +14,44 @@ $ opends [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `init`: Initialise a datapackage algorithm run
+* `get-run`: Get the active run
+* `init`: Initialise a datapackage run
 * `load`: Load data into configuration variable
+* `new`: Generate a new datapackage and algorithm...
 * `reset`: Reset datapackage to clean state
-* `run`: Run the specified configuration
-* `set-param`: Set a parameter value
-* `set-var`: Set a variable value
+* `run`: Execute the active run
+* `set`: Set a variable value
+* `set-run`: Set the active run
+* `show`: Print a variable value
 * `view`: Render a view locally
-* `view-table`: Print a tabular data variable
 
-## `opends init`
+## `opends get-run`
 
-Initialise a datapackage algorithm run
+Get the active run
 
 **Usage**:
 
 ```console
-$ opends init [OPTIONS] [ALGORITHM_NAME]
+$ opends get-run [OPTIONS]
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+## `opends init`
+
+Initialise a datapackage run
+
+**Usage**:
+
+```console
+$ opends init [OPTIONS] [RUN_NAME]
 ```
 
 **Arguments**:
 
-* `[ALGORITHM_NAME]`: The name of the algorithm to initialise  [default: [default_algorithm_name]]
+* `[RUN_NAME]`: Name of the run you want to initialise in the format [algorithm].[run name]
 
 **Options**:
 
@@ -48,14 +64,31 @@ Load data into configuration variable
 **Usage**:
 
 ```console
-$ opends load [OPTIONS] VARIABLE_NAME PATH [RUN_NAME]
+$ opends load [OPTIONS] VARIABLE_NAME PATH
 ```
 
 **Arguments**:
 
 * `VARIABLE_NAME`: Name of variable to populate  [required]
 * `PATH`: Path to data to ingest (xml, csv)  [required]
-* `[RUN_NAME]`: Name of target run
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+## `opends new`
+
+Generate a new datapackage and algorithm scaffold
+
+**Usage**:
+
+```console
+$ opends new [OPTIONS] ALGORITHM_NAME
+```
+
+**Arguments**:
+
+* `ALGORITHM_NAME`: Name of the algorithm to generate  [required]
 
 **Options**:
 
@@ -79,58 +112,68 @@ $ opends reset [OPTIONS]
 
 ## `opends run`
 
-Run the specified configuration
+Execute the active run
 
 **Usage**:
 
 ```console
-$ opends run [OPTIONS] [RUN_NAME]
+$ opends run [OPTIONS]
 ```
-
-**Arguments**:
-
-* `[RUN_NAME]`: The name of the run to execute
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opends set-param`
-
-Set a parameter value
-
-**Usage**:
-
-```console
-$ opends set-param [OPTIONS] VARIABLE_NAME PARAM_NAME PARAM_VALUE [RUN_NAME]
-```
-
-**Arguments**:
-
-* `VARIABLE_NAME`: Name of parameter variable to populate  [required]
-* `PARAM_NAME`: Name of parameter to set  [required]
-* `PARAM_VALUE`: Value to set  [required]
-* `[RUN_NAME]`: Name of target run
-
-**Options**:
-
-* `--help`: Show this message and exit.
-
-## `opends set-var`
+## `opends set`
 
 Set a variable value
 
 **Usage**:
 
 ```console
-$ opends set-var [OPTIONS] VARIABLE_NAME VARIABLE_VALUE [RUN_NAME]
+$ opends set [OPTIONS] VARIABLE_REF VARIABLE_VALUE
 ```
 
 **Arguments**:
 
-* `VARIABLE_NAME`: Name of variable to set  [required]
+* `VARIABLE_REF`: Either a variable name, or a parameter reference in the format [resource name].[parameter name]  [required]
 * `VARIABLE_VALUE`: Value to set  [required]
-* `[RUN_NAME]`: Name of target run
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+## `opends set-run`
+
+Set the active run
+
+**Usage**:
+
+```console
+$ opends set-run [OPTIONS] [RUN_NAME]
+```
+
+**Arguments**:
+
+* `[RUN_NAME]`: Name of the run you want to enable
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+## `opends show`
+
+Print a variable value
+
+**Usage**:
+
+```console
+$ opends show [OPTIONS] VARIABLE_NAME
+```
+
+**Arguments**:
+
+* `VARIABLE_NAME`: Name of variable to print  [required]
 
 **Options**:
 
@@ -143,32 +186,12 @@ Render a view locally
 **Usage**:
 
 ```console
-$ opends view [OPTIONS] VIEW_NAME [RUN_NAME]
+$ opends view [OPTIONS] VIEW_NAME
 ```
 
 **Arguments**:
 
 * `VIEW_NAME`: The name of the view to render  [required]
-* `[RUN_NAME]`: The name of the run to view
-
-**Options**:
-
-* `--help`: Show this message and exit.
-
-## `opends view-table`
-
-Print a tabular data variable
-
-**Usage**:
-
-```console
-$ opends view-table [OPTIONS] VARIABLE_NAME [RUN_NAME]
-```
-
-**Arguments**:
-
-* `VARIABLE_NAME`: Name of variable to view  [required]
-* `[RUN_NAME]`: Name of target run
 
 **Options**:
 
