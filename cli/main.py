@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+import re
 import pickle
 import typer
 import docker
@@ -26,6 +27,8 @@ from opendatapy.datapackage import (
     load_datapackage_configuration,
     write_datapackage_configuration,
     load_algorithm,
+    get_algorithm_name,
+    RUN_DIR,
     VIEW_ARTEFACTS_DIR,
 )
 from opendatapy.helpers import find_by_name, find
@@ -39,7 +42,9 @@ client = docker.from_env()
 
 # Assume we are always at the datapackage root
 # TODO: Validate we actually are, and that this is a datapackage
-DATAPACKAGE_PATH = os.getcwd()
+DATAPACKAGE_PATH = os.getcwd()  # Root datapackage path
+CONFIG_FILE = f"{DATAPACKAGE_PATH}/.opends"
+RUN_EXTENSION = ".run"
 
 
 # Helpers
@@ -59,18 +64,72 @@ def dumb_str_to_type(value) -> Any:
             return value
 
 
-def get_default_run() -> str:
-    """Return the default configuration for the current datapackage"""
-    return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)["runs"][
-        0
-    ]
-
-
 def get_default_algorithm() -> str:
     """Return the default algorithm for the current datapackage"""
     return load_datapackage_configuration(base_path=DATAPACKAGE_PATH)[
         "algorithms"
     ][0]
+
+
+def load_config():
+    """Load CLI configuration file"""
+    with open(CONFIG_FILE, "r") as f:
+        return json.load(f)
+
+
+def get_active_run():
+    try:
+        return load_config()["run"]
+    except FileNotFoundError:
+        print('[red]No active run is set. Have you run "opends init"?[/red]')
+        exit(1)
+
+
+def write_config(run_name):
+    """Write updated CLI configuration file"""
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"run": run_name}, f, indent=2)
+
+
+def run_exists(run_name):
+    """Check if specified run exists"""
+    run_dir = RUN_DIR.format(base_path=DATAPACKAGE_PATH, run_name=run_name)
+    return os.path.exists(run_dir) and os.path.isdir(run_dir)
+
+
+def get_full_run_name(run_name):
+    """Validate and return full run name"""
+    if run_name is not None:
+        # Check the run_name matches the pattern [algorithm].[name]
+        pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
+
+        if not pattern.match(run_name):
+            print(f'[red]"{run_name}" is not a valid run name[/red]')
+            print(
+                "[red]Run names must match the format: "
+                r"\[algorithm].\[name][/red]"
+            )
+            exit(1)
+
+        algorithm_name = get_algorithm_name(run_name)
+        datapackage_algorithms = load_datapackage_configuration(
+            base_path=DATAPACKAGE_PATH
+        )["algorithms"]
+
+        if get_algorithm_name(run_name) not in datapackage_algorithms:
+            print(
+                f'[red]"{algorithm_name}" is not a valid datapacakge '
+                "algorithm[/red]"
+            )
+            print(
+                "[red]Available datapackage algorithms: "
+                f"{datapackage_algorithms}[/red]"
+            )
+            exit(1)
+
+        return run_name + RUN_EXTENSION
+    else:
+        return get_default_algorithm() + RUN_EXTENSION
 
 
 def execute_relationship(run_name: str, variable_name: str) -> None:
@@ -79,7 +138,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     run = load_run_configuration(run_name)
 
     # Load associated relationship
-    with open(f"{get_default_algorithm()}/algorithm.json", "r") as f:
+    with open(f"{get_algorithm_name(run_name)}/algorithm.json", "r") as f:
         relationship = find(
             json.load(f)["relationships"], "source", variable_name
         )
@@ -149,30 +208,44 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
 
 @app.command()
 def init(
-    algorithm_name: Annotated[
+    run_name: Annotated[
         Optional[str],
-        typer.Argument(help="The name of the algorithm to initialise"),
-    ] = get_default_algorithm(),
+        typer.Argument(
+            help=(
+                "Name of the run you want to initialise in the format "
+                "[algorithm].[run name]"
+            )
+        ),
+    ] = None,
 ) -> None:
-    """Initialise a datapackage algorithm run"""
+    """Initialise a datapackage run"""
+    run_name = get_full_run_name(run_name)
+
+    # Check directory doesn't already exist
+    if run_exists(run_name):
+        print(f"[red]{run_name} already exists[/red]")
+        exit(1)
+
     # Create run directory
-    run_dir = f"{DATAPACKAGE_PATH}/{algorithm_name}.run"
+    run_dir = RUN_DIR.format(base_path=DATAPACKAGE_PATH, run_name=run_name)
     os.makedirs(f"{run_dir}/resources")
     os.makedirs(f"{run_dir}/views")
     print(f"[bold]=>[/bold] Created run directory: {run_dir}")
 
+    algorithm_name = get_algorithm_name(run_name)
     algorithm = load_algorithm(algorithm_name, base_path=DATAPACKAGE_PATH)
 
     # Generate default run configuration
     run = {
-        "name": "bindfit.run",
-        "title": f"Default run configuration for {algorithm_name} algorithm",
+        "name": run_name,
+        "title": f"Run configuration for {algorithm_name}",
         "profile": "opends-run",
         "algorithm": f"{algorithm_name}",
         "container": f'{algorithm["container"]}',
         "data": [],
     }
 
+    # Create run configuration and initialise resources
     for variable in algorithm["signature"]:
         # Add variable defaults to run configuration
         run["data"].append(
@@ -197,37 +270,44 @@ def init(
     # Write generated configuration
     write_run_configuration(run, base_path=DATAPACKAGE_PATH)
 
-    print(
-        f"[bold]=>[/bold] Generated default run configuration: {run['name']}"
-    )
+    print(f"[bold]=>[/bold] Generated default run configuration: {run_name}")
 
     # Add default run to datapackage.json
     datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
-    datapackage["runs"].append(run["name"])
+    datapackage["runs"].append(run_name)
     write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
 
-    # Execute all relationships in order
-    for relationship in algorithm["relationships"]:
-        execute_relationship(
-            run_name=run["name"],
-            variable_name=relationship["source"],
-        )
-        print(
-            f"[bold]=>[/bold] Executed relationship for variable [bold]"
-            f'{relationship["source"]}[/bold]'
-        )
+    # Write current run name to config
+    write_config(run_name)
 
 
 @app.command()
-def run(
+def set_run(
     run_name: Annotated[
         Optional[str],
-        typer.Argument(help="The name of the run to execute"),
+        typer.Argument(help="Name of the run you want to enable"),
     ] = None,
 ) -> None:
-    """Run the specified configuration"""
-    if run_name is None:
-        run_name = get_default_run()
+    """Set the active run"""
+    run_name = get_full_run_name(run_name)
+
+    if run_exists(run_name):
+        # Set to active run
+        write_config(run_name)
+    else:
+        print(f"[red]{run_name} does not exist[/red]")
+
+
+@app.command()
+def get_run() -> None:
+    """Get the active run"""
+    print(f"[bold]{get_active_run()}[/bold]")
+
+
+@app.command()
+def run() -> None:
+    """Execute the active run"""
+    run_name = get_active_run()
 
     # Execute algorithm container and print any logs
     print(f"[bold]=>[/bold] Executing [bold]{run_name}[/bold]")
@@ -268,17 +348,9 @@ def view_table(
             show_default=False,
         ),
     ],
-    run_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="Name of target run",
-            show_default=True,
-        ),
-    ] = None,
 ) -> None:
     """Print a tabular data variable"""
-    if run_name is None:
-        run_name = get_default_run()
+    run_name = get_active_run()
 
     resource = load_resource_by_variable(
         run_name=run_name,
@@ -305,14 +377,9 @@ def view(
             help="The name of the view to render", show_default=False
         ),
     ],
-    run_name: Annotated[
-        Optional[str],
-        typer.Argument(help="The name of the run to view"),
-    ] = None,
 ) -> None:
     """Render a view locally"""
-    if run_name is None:
-        run_name = get_default_run()
+    run_name = get_active_run()
 
     print(f"[bold]=>[/bold] Generating [bold]{view_name}[/bold] view")
 
@@ -386,17 +453,9 @@ def load(
             help="Path to data to ingest (xml, csv)", show_default=False
         ),
     ],
-    run_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="Name of target run",
-            show_default=True,
-        ),
-    ] = None,
 ) -> None:
     """Load data into configuration variable"""
-    if run_name is None:
-        run_name = get_default_run()
+    run_name = get_active_run()
 
     # Load resource into TabularDataResource object
     resource = load_resource_by_variable(
@@ -441,17 +500,9 @@ def set_param(
             show_default=False,
         ),
     ],
-    run_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="Name of target run",
-            show_default=True,
-        ),
-    ] = None,
 ) -> None:
     """Set a parameter value"""
-    if run_name is None:
-        run_name = get_default_run()
+    run_name = get_active_run()
 
     # Parse value (workaround for Typer not supporting Union types :<)
     param_value = dumb_str_to_type(param_value)
@@ -526,17 +577,9 @@ def set_var(
             show_default=False,
         ),
     ],
-    run_name: Annotated[
-        Optional[str],
-        typer.Argument(
-            help="Name of target run",
-            show_default=True,
-        ),
-    ] = None,
 ) -> None:
     """Set a variable value"""
-    if run_name is None:
-        run_name = get_default_run()
+    run_name = get_active_run()
 
     # Parse value (workaround for Typer not supporting Union types :<)
     variable_value = dumb_str_to_type(variable_value)
@@ -620,6 +663,9 @@ def reset():
     datapackage = load_datapackage_configuration(base_path=DATAPACKAGE_PATH)
     datapackage["runs"] = []
     write_datapackage_configuration(datapackage, base_path=DATAPACKAGE_PATH)
+
+    # Remove CLI config
+    os.remove(CONFIG_FILE)
 
 
 if __name__ == "__main__":
