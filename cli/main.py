@@ -587,7 +587,7 @@ def set_var(
     # Load algorithum signature
     signature = find_by_name(
         load_algorithm(
-            algorithm_name=run_name.split(".")[0],
+            algorithm_name=get_algorithm_name(run_name),
             base_path=DATAPACKAGE_PATH,
         )["signature"],
         variable_name,
@@ -645,6 +645,40 @@ def set_var(
         f"[bold]=>[/bold] Successfully set [bold]{variable_name}[/bold] "
         "variable"
     )
+
+
+@app.command()
+def get_var(
+    variable_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of variable to set",
+            show_default=False,
+        ),
+    ],
+) -> None:
+    """Print a variable value"""
+    run_name = get_active_run()
+
+    # Load algorithum signature
+    signature = find_by_name(
+        load_algorithm(
+            algorithm_name=get_algorithm_name(run_name),
+            base_path=DATAPACKAGE_PATH,
+        )["signature"],
+        variable_name,
+    )
+
+    # Check we can print the value here and raise some helpful errors
+    if signature.get(
+        "profile"
+    ) is not None and "tabular-data-resource" in signature.get("profile"):
+        print('[red]Use command "view-table" for tabular data resources[/red]')
+        exit(1)
+
+    # Get value from run configuration
+    run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+    print(find_by_name(run["data"], variable_name)["value"])
 
 
 @app.command()
