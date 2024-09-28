@@ -251,13 +251,16 @@ def init(
         "profile": "opends-run",
         "algorithm": f"{algorithm_name}",
         "container": f'{algorithm["container"]}',
-        "data": [],
+        "data": {
+            "inputs": [],
+            "outputs": [],
+        },
     }
 
     # Create run configuration and initialise resources
-    for variable in algorithm["signature"]:
+    for variable in algorithm["signature"]["inputs"]:
         # Add variable defaults to run configuration
-        run["data"].append(
+        run["data"]["inputs"].append(
             {
                 "name": variable["name"],
                 **variable["default"],
@@ -274,7 +277,28 @@ def init(
                 base_path=DATAPACKAGE_PATH,
             )
 
-            print(f"[bold]=>[/bold] Generated resource: {resource_name}")
+            print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
+
+    for variable in algorithm["signature"]["outputs"]:
+        # Add variable defaults to run configuration
+        run["data"]["outputs"].append(
+            {
+                "name": variable["name"],
+                **variable["default"],
+            }
+        )
+
+        # Initialise associated resources
+        if variable["type"] == "resource":
+            resource_name = variable["default"]["resource"]
+
+            init_resource(
+                run_name=run["name"],
+                resource_name=resource_name,
+                base_path=DATAPACKAGE_PATH,
+            )
+
+            print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
 
     # Write generated configuration
     write_run_configuration(run, base_path=DATAPACKAGE_PATH)
