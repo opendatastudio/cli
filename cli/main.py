@@ -23,14 +23,18 @@ from opendatapy.datapackage import (
     init_resource,
     load_resource_by_variable,
     write_resource,
+    update_resource,
     load_run_configuration,
     write_run_configuration,
+    load_variable,
+    load_variable_signature,
     load_datapackage_configuration,
     write_datapackage_configuration,
     load_algorithm,
     write_algorithm,
     get_algorithm_name,
     RUN_DIR,
+    RELATIONSHIPS_FILE,
     VIEW_ARTEFACTS_DIR,
 )
 from opendatapy.helpers import find_by_name, find
@@ -102,10 +106,13 @@ def run_exists(run_name):
 def get_full_run_name(run_name):
     """Validate and return full run name"""
     if run_name is not None:
-        # Check the run_name matches the pattern [algorithm].[name]
+        # Check the run_name matches the pattern [algorithm].[name] or
+        # [algorithm]
         pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
 
-        if not pattern.match(run_name):
+        algorithms = load_datapackage_configuration()["algorithms"]
+
+        if not pattern.match(run_name) and run_name not in algorithms:
             print(f'[red]"{run_name}" is not a valid run name[/red]')
             print(
                 "[red]Run names must match the format: "
@@ -140,18 +147,50 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     run = load_run_configuration(run_name)
 
     # Load associated relationship
-    with open(f"{get_algorithm_name(run_name)}/algorithm.json", "r") as f:
+    with open(
+        RELATIONSHIPS_FILE.format(
+            base_path=DATAPACKAGE_PATH,
+            algorithm_name=get_algorithm_name(run_name),
+        ),
+        "r",
+    ) as f:
         relationship = find(
             json.load(f)["relationships"], "source", variable_name
         )
 
     # Apply relationship rules
     for rule in relationship["rules"]:
-        if rule["type"] == "value":
+        if rule["type"] == "change":
+            # Currently the only type of "change" rule we have is one that
+            # mirrors the schema from the source to other resources, so assume
+            # this is the case here
+
+            # TODO: This will need to change in the future
+
+            source = load_resource_by_variable(
+                run_name=run_name,
+                variable_name=variable_name,
+                base_path=DATAPACKAGE_PATH,
+                as_dict=True,
+            )
+
+            for target in rule["targets"]:
+                update_resource(
+                    run_name=run_name,
+                    resource_name=target["name"],
+                    schema=source["schema"],
+                    base_path=DATAPACKAGE_PATH,
+                )
+
+        elif rule["type"] == "value":
             # Check if this rule applies to current run configuration state
 
             # Get source variable value
-            value = find_by_name(run["data"], variable_name)["value"]
+            value = load_variable(
+                run_name=run_name,
+                variable_name=variable_name,
+                base_path=DATAPACKAGE_PATH,
+            )["value"]
 
             # If the source variable value matches the rule value, execute
             # the relationship
@@ -159,9 +198,12 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                 for target in rule["targets"]:
                     if "disabled" in target:
                         # Set target variable disabled value
-                        target_variable = find_by_name(
-                            run["data"], target["name"]
+                        target_variable = load_variable(
+                            run_name=run_name,
+                            variable_name=target["name"],
+                            base_path=DATAPACKAGE_PATH,
                         )
+
                         target_variable["disabled"] = target["disabled"]
 
                     if target["type"] == "resource":
@@ -186,10 +228,19 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         )
                     elif target["type"] == "value":
                         # Set target variable value
-                        target_variable = find_by_name(
-                            run["data"], target["name"]
+                        target_variable = load_variable(
+                            run_name=run_name,
+                            variable_name=target["name"],
+                            base_path=DATAPACKAGE_PATH,
                         )
-                        target_variable["value"] = target["value"]
+
+                        if target.get("value") is not None:
+                            target_variable["value"] = target["value"]
+
+                        if target.get("metaschema") is not None:
+                            target_variable["metaschema"] = target[
+                                "metaschema"
+                            ]
                     else:
                         raise NotImplementedError(
                             (
@@ -244,13 +295,16 @@ def init(
         "profile": "opends-run",
         "algorithm": f"{algorithm_name}",
         "container": f'{algorithm["container"]}',
-        "data": [],
+        "data": {
+            "inputs": [],
+            "outputs": [],
+        },
     }
 
     # Create run configuration and initialise resources
-    for variable in algorithm["signature"]:
+    for variable in algorithm["signature"]["inputs"]:
         # Add variable defaults to run configuration
-        run["data"].append(
+        run["data"]["inputs"].append(
             {
                 "name": variable["name"],
                 **variable["default"],
@@ -267,7 +321,28 @@ def init(
                 base_path=DATAPACKAGE_PATH,
             )
 
-            print(f"[bold]=>[/bold] Generated resource: {resource_name}")
+            print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
+
+    for variable in algorithm["signature"]["outputs"]:
+        # Add variable defaults to run configuration
+        run["data"]["outputs"].append(
+            {
+                "name": variable["name"],
+                **variable["default"],
+            }
+        )
+
+        # Initialise associated resources
+        if variable["type"] == "resource":
+            resource_name = variable["default"]["resource"]
+
+            init_resource(
+                run_name=run["name"],
+                resource_name=resource_name,
+                base_path=DATAPACKAGE_PATH,
+            )
+
+            print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
 
     # Write generated configuration
     write_run_configuration(run, base_path=DATAPACKAGE_PATH)
@@ -355,12 +430,10 @@ def show(
     run_name = get_active_run()
 
     # Load algorithum signature to check variable type
-    signature = find_by_name(
-        load_algorithm(
-            algorithm_name=get_algorithm_name(run_name),
-            base_path=DATAPACKAGE_PATH,
-        )["signature"],
-        variable_name,
+    signature = load_variable_signature(
+        run_name=run_name,
+        variable_name=variable_name,
+        base_path=DATAPACKAGE_PATH,
     )
 
     if signature["type"] == "resource":
@@ -380,10 +453,15 @@ def show(
         )
     else:
         # Variable is a simple string/number/bool value
-        run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+        variable = load_variable(
+            run_name=run_name,
+            variable_name=variable_name,
+            base_path=DATAPACKAGE_PATH,
+        )
+
         print(
             Panel(
-                str(find_by_name(run["data"], variable_name)["value"]),
+                str(variable["value"]),
                 title=f"{variable_name}",
                 expand=False,
             )
@@ -494,6 +572,12 @@ def load(
         run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
     )
 
+    # Execute any applicable relationships
+    execute_relationship(
+        run_name=run_name,
+        variable_name=variable_name,
+    )
+
     print("[bold]=>[/bold] Resource successfully loaded!")
 
 
@@ -503,8 +587,8 @@ def set(
         str,
         typer.Argument(
             help=(
-                "Either a variable name, or a parameter reference in the "
-                "format [resource name].[parameter name]"
+                "Either a variable name, or a table reference in the format "
+                "[resource name].[primary key].[column name]"
             ),
             show_default=False,
         ),
@@ -525,21 +609,24 @@ def set(
     variable_value = dumb_str_to_type(variable_value)
 
     if "." in variable_ref:
-        # Variable reference is a parameter reference
+        # Variable reference is a table reference
 
-        # Check the variable_ref matches the pattern [resource].[param]
-        pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
+        # Check the variable_ref matches the pattern:
+        # [resource].[primary key].[column]
+        pattern = re.compile(
+            r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$"
+        )
 
         if not pattern.match(variable_ref):
             print(
                 "[red]Variable name argument must be either a variable name "
-                "or a parameter reference in the format "
-                r"\[resource name].\[param name][/red]"
+                "or a table reference in the format "
+                r"\[resource name].\[primary key].\[column name][/red]"
             )
             exit(1)
 
-        # Parse variable and param names
-        variable_name, param_name = variable_ref.split(".")
+        # Parse variable and row/col names
+        variable_name, row_name, col_name = variable_ref.split(".")
 
         # Load param resource
         resource = load_resource_by_variable(
@@ -548,11 +635,11 @@ def set(
             base_path=DATAPACKAGE_PATH,
         )
 
-        # Check it's a param resource
-        if resource.profile != "parameter-tabular-data-resource":
+        # Check it's a tabular data resource
+        if resource.profile != "tabular-data-resource":
             print(
                 f"[red]Resource [bold]{resource.name}[/bold] is not of type "
-                '"parameters"[/red]'
+                '"tabular-data-resource"[/red]'
             )
             exit(1)
 
@@ -565,20 +652,21 @@ def set(
             exit(1)
 
         print(
-            f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
-            f"value [bold]{variable_value}[/bold]"
+            f"[bold]=>[/bold] Setting table value at row [bold]{row_name}"
+            f"[/bold] and column [bold]{col_name}[/bold] to "
+            f"[bold]{variable_value}[/bold]"
         )
 
-        # Set parameter value (initial guess)
+        # Set table value
         try:
-            # This will generate a key error if param_name doesn't exist
+            # This will generate a key error if row_name doesn't exist
             # The assignment doesn't unfortunately
-            resource.data.loc[param_name]  # Ensure param_name row exists
-            resource.data.loc[param_name, "init"] = variable_value
+            resource.data.loc[row_name]  # Ensure row exists
+            resource.data.loc[row_name, col_name] = variable_value
         except KeyError:
             print(
-                f'[red]Could not find parameter "{param_name}" in resource '
-                f"[bold]{resource.name}[/bold][/red]"
+                f'[red]Could not find row "{row_name}" or column "{col_name}" '
+                f"in resource [bold]{resource.name}[/bold][/red]"
             )
             exit(1)
 
@@ -588,21 +676,18 @@ def set(
         )
 
         print(
-            f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
-            f"[/bold] value to [bold]{variable_value}[/bold] in parameter "
-            f"resource [bold]{resource.name}[/bold]"
+            f"[bold]=>[/bold] Successfully set table value at row "
+            f"[bold]{row_name}[/bold] and column [bold]{col_name}[/bold] to "
+            f"[bold]{variable_value}[/bold] in resource [bold]{resource.name}"
+            "[/bold]"
         )
     else:
         # Variable reference is a simple variable name
         variable_name = variable_ref
 
-        # Load algorithum signature
-        signature = find_by_name(
-            load_algorithm(
-                algorithm_name=get_algorithm_name(run_name),
-                base_path=DATAPACKAGE_PATH,
-            )["signature"],
-            variable_name,
+        # Load variable signature
+        signature = load_variable_signature(
+            run_name, variable_name, base_path=DATAPACKAGE_PATH
         )
 
         # Convenience dict mapping opends types to Python types
@@ -617,7 +702,7 @@ def set(
         if signature.get("profile") == "tabular-data-resource":
             print('[red]Use command "load" for tabular data resource[/red]')
             exit(1)
-        elif signature.get("profile") == "parameter-tabular-data-resource":
+        elif "parameter-tabular-data-resource" in signature.get("profile", ""):
             print('[red]Use command "set-param" for parameter resource[/red]')
             exit(1)
         # Specify False as fallback value here to avoid "None"s leaking through
@@ -648,7 +733,9 @@ def set(
         run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
 
         # Set variable value
-        find_by_name(run["data"], variable_name)["value"] = variable_value
+        find_by_name(
+            run["data"]["inputs"] + run["data"]["outputs"], variable_name
+        )["value"] = variable_value
 
         # Write configuration
         write_run_configuration(run, base_path=DATAPACKAGE_PATH)
