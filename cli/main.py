@@ -189,7 +189,14 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         target_variable = find_by_name(
                             run["data"], target["name"]
                         )
-                        target_variable["value"] = target["value"]
+
+                        if target.get("value") is not None:
+                            target_variable["value"] = target["value"]
+
+                        if target.get("metaschema") is not None:
+                            target_variable["metaschema"] = target[
+                                "metaschema"
+                            ]
                     else:
                         raise NotImplementedError(
                             (
