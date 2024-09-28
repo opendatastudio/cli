@@ -25,12 +25,15 @@ from opendatapy.datapackage import (
     write_resource,
     load_run_configuration,
     write_run_configuration,
+    load_variable,
+    load_variable_signature,
     load_datapackage_configuration,
     write_datapackage_configuration,
     load_algorithm,
     write_algorithm,
     get_algorithm_name,
     RUN_DIR,
+    RELATIONSHIPS_FILE,
     VIEW_ARTEFACTS_DIR,
 )
 from opendatapy.helpers import find_by_name, find
@@ -140,7 +143,13 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     run = load_run_configuration(run_name)
 
     # Load associated relationship
-    with open(f"{get_algorithm_name(run_name)}/algorithm.json", "r") as f:
+    with open(
+        RELATIONSHIPS_FILE.format(
+            base_path=DATAPACKAGE_PATH,
+            algorithm_name=get_algorithm_name(run_name),
+        ),
+        "r",
+    ) as f:
         relationship = find(
             json.load(f)["relationships"], "source", variable_name
         )
@@ -151,7 +160,11 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
             # Check if this rule applies to current run configuration state
 
             # Get source variable value
-            value = find_by_name(run["data"], variable_name)["value"]
+            value = load_variable(
+                run_name=run_name,
+                variable_name=variable_name,
+                base_path=DATAPACKAGE_PATH,
+            )["value"]
 
             # If the source variable value matches the rule value, execute
             # the relationship
@@ -159,9 +172,12 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                 for target in rule["targets"]:
                     if "disabled" in target:
                         # Set target variable disabled value
-                        target_variable = find_by_name(
-                            run["data"], target["name"]
+                        target_variable = load_variable(
+                            run_name=run_name,
+                            variable_name=target["name"],
+                            base_path=DATAPACKAGE_PATH,
                         )
+
                         target_variable["disabled"] = target["disabled"]
 
                     if target["type"] == "resource":
@@ -186,8 +202,10 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         )
                     elif target["type"] == "value":
                         # Set target variable value
-                        target_variable = find_by_name(
-                            run["data"], target["name"]
+                        target_variable = load_variable(
+                            run_name=run_name,
+                            variable_name=target["name"],
+                            base_path=DATAPACKAGE_PATH,
                         )
 
                         if target.get("value") is not None:
@@ -386,12 +404,10 @@ def show(
     run_name = get_active_run()
 
     # Load algorithum signature to check variable type
-    signature = find_by_name(
-        load_algorithm(
-            algorithm_name=get_algorithm_name(run_name),
-            base_path=DATAPACKAGE_PATH,
-        )["signature"],
-        variable_name,
+    signature = load_variable_signature(
+        run_name=run_name,
+        variable_name=variable_name,
+        base_path=DATAPACKAGE_PATH,
     )
 
     if signature["type"] == "resource":
@@ -411,10 +427,15 @@ def show(
         )
     else:
         # Variable is a simple string/number/bool value
-        run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
+        variable = load_variable(
+            run_name=run_name,
+            variable_name=variable_name,
+            base_path=DATAPACKAGE_PATH,
+        )
+
         print(
             Panel(
-                str(find_by_name(run["data"], variable_name)["value"]),
+                str(variable["value"]),
                 title=f"{variable_name}",
                 expand=False,
             )
@@ -627,13 +648,9 @@ def set(
         # Variable reference is a simple variable name
         variable_name = variable_ref
 
-        # Load algorithum signature
-        signature = find_by_name(
-            load_algorithm(
-                algorithm_name=get_algorithm_name(run_name),
-                base_path=DATAPACKAGE_PATH,
-            )["signature"],
-            variable_name,
+        # Load variable signature
+        signature = load_variable_signature(
+            run_name, variable_name, base_path=DATAPACKAGE_PATH
         )
 
         # Convenience dict mapping opends types to Python types
@@ -679,7 +696,9 @@ def set(
         run = load_run_configuration(run_name, base_path=DATAPACKAGE_PATH)
 
         # Set variable value
-        find_by_name(run["data"], variable_name)["value"] = variable_value
+        find_by_name(
+            run["data"]["inputs"] + run["data"]["outputs"], variable_name
+        )["value"] = variable_value
 
         # Write configuration
         write_run_configuration(run, base_path=DATAPACKAGE_PATH)
