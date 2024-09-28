@@ -23,6 +23,7 @@ from opendatapy.datapackage import (
     init_resource,
     load_resource_by_variable,
     write_resource,
+    update_resource,
     load_run_configuration,
     write_run_configuration,
     load_variable,
@@ -105,10 +106,13 @@ def run_exists(run_name):
 def get_full_run_name(run_name):
     """Validate and return full run name"""
     if run_name is not None:
-        # Check the run_name matches the pattern [algorithm].[name]
+        # Check the run_name matches the pattern [algorithm].[name] or
+        # [algorithm]
         pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
 
-        if not pattern.match(run_name):
+        algorithms = load_datapackage_configuration()["algorithms"]
+
+        if not pattern.match(run_name) and run_name not in algorithms:
             print(f'[red]"{run_name}" is not a valid run name[/red]')
             print(
                 "[red]Run names must match the format: "
@@ -156,7 +160,29 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
 
     # Apply relationship rules
     for rule in relationship["rules"]:
-        if rule["type"] == "value":
+        if rule["type"] == "change":
+            # Currently the only type of "change" rule we have is one that
+            # mirrors the schema from the source to other resources, so assume
+            # this is the case here
+
+            # TODO: This will need to change in the future
+
+            source = load_resource_by_variable(
+                run_name=run_name,
+                variable_name=variable_name,
+                base_path=DATAPACKAGE_PATH,
+                as_dict=True,
+            )
+
+            for target in rule["targets"]:
+                update_resource(
+                    run_name=run_name,
+                    resource_name=target["name"],
+                    schema=source["schema"],
+                    base_path=DATAPACKAGE_PATH,
+                )
+
+        elif rule["type"] == "value":
             # Check if this rule applies to current run configuration state
 
             # Get source variable value
@@ -544,6 +570,12 @@ def load(
     # Write to resource
     write_resource(
         run_name=run_name, resource=resource, base_path=DATAPACKAGE_PATH
+    )
+
+    # Execute any applicable relationships
+    execute_relationship(
+        run_name=run_name,
+        variable_name=variable_name,
     )
 
     print("[bold]=>[/bold] Resource successfully loaded!")
