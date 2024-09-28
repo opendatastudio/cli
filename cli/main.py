@@ -146,6 +146,10 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     # Load run configuration for modification
     run = load_run_configuration(run_name)
 
+    print(
+        f"[bold]=>[/bold] Executing relationship for variable {variable_name}"
+    )
+
     # Load associated relationship
     with open(
         RELATIONSHIPS_FILE.format(
@@ -215,10 +219,18 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                             as_dict=True,
                         )
 
-                        if target.get("data") is not None:
+                        if "data" in target:
+                            print(
+                                " [bold]*[/bold] Setting "
+                                f"{target_resource['name']} data"
+                            )
                             target_resource["data"] = target["data"]
 
-                        if target.get("schema") is not None:
+                        if "schema" in target:
+                            print(
+                                " [bold]*[/bold] Setting "
+                                f"{target_resource['name']} schema"
+                            )
                             target_resource["schema"] = target["schema"]
 
                         write_resource(
@@ -228,16 +240,26 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         )
                     elif target["type"] == "value":
                         # Set target variable value
-                        target_variable = load_variable(
-                            run_name=run_name,
-                            variable_name=target["name"],
-                            base_path=DATAPACKAGE_PATH,
+                        target_variable = find_by_name(
+                            run["data"]["inputs"] + run["data"]["outputs"],
+                            target["name"],
                         )
 
-                        if target.get("value") is not None:
+                        if "value" in target:
+                            print(
+                                f" [bold]*[/bold] Setting {target['name']} "
+                                f"value from {target_variable['value']} to "
+                                f"{target['value']}"
+                            )
                             target_variable["value"] = target["value"]
 
-                        if target.get("metaschema") is not None:
+                        if "metaschema" in target:
+                            print(
+                                f" [bold]*[/bold] Setting {target['name']} "
+                                "metaschema from "
+                                f"{target_variable['metaschema']} "
+                                f"to {target['metaschema']}"
+                            )
                             target_variable["metaschema"] = target[
                                 "metaschema"
                             ]
