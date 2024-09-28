@@ -855,7 +855,7 @@ def new(
                     "type": "number",
                     "null": False,
                     "default": {"value": 42},
-                }
+                },
             ],
             "outputs": [
                 {
@@ -865,10 +865,9 @@ def new(
                     "type": "number",
                     "null": True,
                     "default": {"value": None},
-                }
+                },
             ],
         },
-        "relationships": [],
     }
 
     algorithm_code = '''def main(input):
