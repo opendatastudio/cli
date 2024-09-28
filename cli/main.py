@@ -555,8 +555,8 @@ def set(
         str,
         typer.Argument(
             help=(
-                "Either a variable name, or a parameter reference in the "
-                "format [resource name].[parameter name]"
+                "Either a variable name, or a table reference in the format "
+                "[resource name].[primary key].[column name]"
             ),
             show_default=False,
         ),
@@ -577,21 +577,24 @@ def set(
     variable_value = dumb_str_to_type(variable_value)
 
     if "." in variable_ref:
-        # Variable reference is a parameter reference
+        # Variable reference is a table reference
 
-        # Check the variable_ref matches the pattern [resource].[param]
-        pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
+        # Check the variable_ref matches the pattern:
+        # [resource].[primary key].[column]
+        pattern = re.compile(
+            r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$"
+        )
 
         if not pattern.match(variable_ref):
             print(
                 "[red]Variable name argument must be either a variable name "
-                "or a parameter reference in the format "
-                r"\[resource name].\[param name][/red]"
+                "or a table reference in the format "
+                r"\[resource name].\[primary key].\[column name][/red]"
             )
             exit(1)
 
-        # Parse variable and param names
-        variable_name, param_name = variable_ref.split(".")
+        # Parse variable and row/col names
+        variable_name, row_name, col_name = variable_ref.split(".")
 
         # Load param resource
         resource = load_resource_by_variable(
@@ -600,11 +603,11 @@ def set(
             base_path=DATAPACKAGE_PATH,
         )
 
-        # Check it's a param resource
-        if resource.profile != "parameter-tabular-data-resource":
+        # Check it's a tabular data resource
+        if resource.profile != "tabular-data-resource":
             print(
                 f"[red]Resource [bold]{resource.name}[/bold] is not of type "
-                '"parameters"[/red]'
+                '"tabular-data-resource"[/red]'
             )
             exit(1)
 
@@ -617,20 +620,21 @@ def set(
             exit(1)
 
         print(
-            f"[bold]=>[/bold] Setting parameter [bold]{param_name}[/bold] to "
-            f"value [bold]{variable_value}[/bold]"
+            f"[bold]=>[/bold] Setting table value at row [bold]{row_name}"
+            f"[/bold] and column [bold]{col_name}[/bold] to "
+            f"[bold]{variable_value}[/bold]"
         )
 
-        # Set parameter value (initial guess)
+        # Set table value
         try:
-            # This will generate a key error if param_name doesn't exist
+            # This will generate a key error if row_name doesn't exist
             # The assignment doesn't unfortunately
-            resource.data.loc[param_name]  # Ensure param_name row exists
-            resource.data.loc[param_name, "init"] = variable_value
+            resource.data.loc[row_name]  # Ensure row exists
+            resource.data.loc[row_name, col_name] = variable_value
         except KeyError:
             print(
-                f'[red]Could not find parameter "{param_name}" in resource '
-                f"[bold]{resource.name}[/bold][/red]"
+                f'[red]Could not find row "{row_name}" or column "{col_name}" '
+                f"in resource [bold]{resource.name}[/bold][/red]"
             )
             exit(1)
 
@@ -640,9 +644,10 @@ def set(
         )
 
         print(
-            f"[bold]=>[/bold] Successfully set parameter [bold]{param_name}"
-            f"[/bold] value to [bold]{variable_value}[/bold] in parameter "
-            f"resource [bold]{resource.name}[/bold]"
+            f"[bold]=>[/bold] Successfully set table value at row "
+            f"[bold]{row_name}[/bold] and column [bold]{col_name}[/bold] to "
+            f"[bold]{variable_value}[/bold] in resource [bold]{resource.name}"
+            "[/bold]"
         )
     else:
         # Variable reference is a simple variable name
@@ -665,7 +670,7 @@ def set(
         if signature.get("profile") == "tabular-data-resource":
             print('[red]Use command "load" for tabular data resource[/red]')
             exit(1)
-        elif signature.get("profile") == "parameter-tabular-data-resource":
+        elif "parameter-tabular-data-resource" in signature.get("profile", ""):
             print('[red]Use command "set-param" for parameter resource[/red]')
             exit(1)
         # Specify False as fallback value here to avoid "None"s leaking through
