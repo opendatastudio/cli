@@ -846,34 +846,36 @@ def new(
         "profile": "opends-algorithm",
         "code": "algorithm.py",
         "container": "opends/python-run-base:v1",
-        "signature": [
-            {
-                "name": "input",
-                "title": "Input",
-                "description": "An input variable",
-                "type": "number",
-                "null": False,
-                "default": {"value": 42},
-            },
-            {
-                "name": "output",
-                "title": "Output",
-                "description": "An output variable",
-                "type": "number",
-                "null": True,
-                "default": {"value": None},
-            },
-        ],
+        "signature": {
+            "inputs": [
+                {
+                    "name": "input",
+                    "title": "Input",
+                    "description": "An input variable",
+                    "type": "number",
+                    "null": False,
+                    "default": {"value": 42},
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "output",
+                    "title": "Output",
+                    "description": "An output variable",
+                    "type": "number",
+                    "null": True,
+                    "default": {"value": None},
+                }
+            ],
+        },
         "relationships": [],
     }
 
-    algorithm_code = '''def main(input, output):
-    """A new algorithm"""
-
+    algorithm_code = '''def main(input):
+    """An algorithm that multiplies the input by 2"""
     return {
-        "output": input**2,
-    }
-    '''
+        "output": input*2,
+    }'''
 
     write_datapackage_configuration(datapackage, base_path=datapackage_dir)
     write_algorithm(algorithm, base_path=datapackage_dir)
