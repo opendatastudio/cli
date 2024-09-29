@@ -40,7 +40,7 @@ from opendatapy.datapackage import (
 from opendatapy.helpers import find_by_name, find
 
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 client = docker.from_env()
