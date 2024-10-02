@@ -151,16 +151,20 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     )
 
     # Load associated relationship
-    with open(
-        RELATIONSHIPS_FILE.format(
-            base_path=DATAPACKAGE_PATH,
-            algorithm_name=get_algorithm_name(run_name),
-        ),
-        "r",
-    ) as f:
-        relationship = find(
-            json.load(f)["relationships"], "source", variable_name
-        )
+    try:
+        with open(
+            RELATIONSHIPS_FILE.format(
+                base_path=DATAPACKAGE_PATH,
+                algorithm_name=get_algorithm_name(run_name),
+            ),
+            "r",
+        ) as f:
+            relationship = find(
+                json.load(f)["relationships"], "source", variable_name
+            )
+    except FileNotFoundError:
+        # No relationships to execute, return
+        return
 
     # Apply relationship rules
     for rule in relationship["rules"]:
@@ -714,9 +718,9 @@ def set(
 
         # Convenience dict mapping opends types to Python types
         type_map = {
-            "string": str,
-            "boolean": bool,
-            "number": float | int,
+            "string": [str],
+            "boolean": [bool],
+            "number": [float, int],
         }
 
         # Check the value is of the expected type for this variable
@@ -728,7 +732,7 @@ def set(
             print('[red]Use command "set-param" for parameter resource[/red]')
             exit(1)
         # Specify False as fallback value here to avoid "None"s leaking through
-        elif type_map.get(signature["type"], False) != type(variable_value):
+        elif not (type(variable_value) in type_map.get(signature["type"], [])):
             print(
                 f"[red]Variable value must be of type {signature['type']}"
                 "[/red]"
@@ -831,11 +835,7 @@ def new(
         "profile": "opends-analysis-datapackage",
         "algorithms": [algorithm_name],
         "runs": [],
-        "repository": {
-            "type": "git",
-            "url": "https://github.com/opendatastudio/example-datapackage",
-            "name": "opendatastudio/example-datapackage",
-        },
+        "repository": {},
         "created": current_time,
         "updated": current_time,
     }
@@ -849,8 +849,8 @@ def new(
         "signature": {
             "inputs": [
                 {
-                    "name": "input",
-                    "title": "Input",
+                    "name": "x",
+                    "title": "X",
                     "description": "An input variable",
                     "type": "number",
                     "null": False,
@@ -859,8 +859,8 @@ def new(
             ],
             "outputs": [
                 {
-                    "name": "output",
-                    "title": "Output",
+                    "name": "result",
+                    "title": "Result",
                     "description": "An output variable",
                     "type": "number",
                     "null": True,
@@ -870,10 +870,10 @@ def new(
         },
     }
 
-    algorithm_code = '''def main(input):
-    """An algorithm that multiplies the input by 2"""
+    algorithm_code = '''def main(x):
+    """An algorithm that multiplies the input variable by 2"""
     return {
-        "output": input*2,
+        "result": x*2,
     }'''
 
     write_datapackage_configuration(datapackage, base_path=datapackage_dir)
