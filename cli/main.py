@@ -118,6 +118,10 @@ def get_full_run_name(run_name):
                 "[red]Run names must match the format: "
                 r"\[algorithm].\[name][/red]"
             )
+            print(
+                "[red]Did you forget to add your algorithm to "
+                "datapackage.json?[/red]"
+            )
             exit(1)
 
         algorithm_name = get_algorithm_name(run_name)
