@@ -1,16 +1,16 @@
 # opendata.studio CLI
 
-A command line client for running opendata.studio datapackages.
+A command line client for running opendata.studio dataflows.
 
 View usage documentation at [docs/README.md](docs/README.md).
 
 
 ## Development
 
-To install and test locally, navigate to the datapackage directory you want to
+To install and test locally, navigate to the dataflow directory you want to
 test.
 ```
-cd /path/to/datapackage
+cd /path/to/dataflow
 ```
 
 Create a virtualenv and install the CLI via pip in local mode:

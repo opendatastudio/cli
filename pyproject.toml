@@ -1,7 +1,7 @@
 [project]
 name = "opendatacli"
 version = "0.0.0"
-description = "A command line client for running opendata.studio datapackages"
+description = "A command line client for running opendata.studio dataflows"
 requires-python = ">=3.11"
 authors = [
     { name = "Varvara Efremova", email = "varvara@echus.co" },

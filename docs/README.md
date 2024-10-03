@@ -15,10 +15,10 @@ $ opends [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `get-run`: Get the active run
-* `init`: Initialise a datapackage run
+* `init`: Initialise a dataflow run
 * `load`: Load data into configuration variable
-* `new`: Generate a new datapackage and algorithm...
-* `reset`: Reset datapackage to clean state
+* `new`: Generate a new dataflow and algorithm...
+* `reset`: Reset dataflow to clean state
 * `run`: Execute the active run
 * `set`: Set a variable value
 * `set-run`: Set the active run
@@ -41,7 +41,7 @@ $ opends get-run [OPTIONS]
 
 ## `opends init`
 
-Initialise a datapackage run
+Initialise a dataflow run
 
 **Usage**:
 
@@ -78,7 +78,7 @@ $ opends load [OPTIONS] VARIABLE_NAME PATH
 
 ## `opends new`
 
-Generate a new datapackage and algorithm scaffold
+Generate a new dataflow and algorithm scaffold
 
 **Usage**:
 
@@ -96,7 +96,7 @@ $ opends new [OPTIONS] ALGORITHM_NAME
 
 ## `opends reset`
 
-Reset datapackage to clean state
+Reset dataflow to clean state
 
 Removes all run outputs and resets configurations to default
 
@@ -136,7 +136,7 @@ $ opends set [OPTIONS] VARIABLE_REF VARIABLE_VALUE
 
 **Arguments**:
 
-* `VARIABLE_REF`: Either a variable name, or a parameter reference in the format [resource name].[parameter name]  [required]
+* `VARIABLE_REF`: Either a variable name, or a table reference in the format [resource name].[primary key].[column name]  [required]
 * `VARIABLE_VALUE`: Value to set  [required]
 
 **Options**:
