@@ -170,6 +170,10 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
         # No relationships to execute, return
         return
 
+    if relationship is None:
+        # No relationship for specified variable found, return
+        return
+
     # Apply relationship rules
     for rule in relationship["rules"]:
         if rule["type"] == "change":
