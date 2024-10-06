@@ -13,7 +13,7 @@ dependencies = [
     "docker >= 7.1.0, < 8",
     "matplotlib >= 3.9.1, < 4",
     "tornado",  # Required for rendering interactive plots
-    "opendatapy @ git+ssh://git@github.com/opendatastudio/opendatapy@main",
+    "opendatapy >= 0.1.1",
     "tabulate",
 ]
 

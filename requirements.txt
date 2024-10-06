@@ -35,7 +35,7 @@ numpy==2.0.0
     #   contourpy
     #   matplotlib
     #   pandas
-opendatapy @ git+ssh://git@github.com/opendatastudio/opendatapy@main
+opendatapy==0.1.1
     # via opends-cli (pyproject.toml)
 packaging==24.1
     # via matplotlib
