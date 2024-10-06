@@ -2,7 +2,7 @@
 
 A command line client for running opendata.studio dataflows.
 
-View usage documentation at [docs/README.md](docs/README.md).
+View usage documentation at [docs/README.md](https://github.com/opendatastudio/cli/blob/main/docs/README.md).
 
 
 ## Development
