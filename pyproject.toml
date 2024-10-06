@@ -1,6 +1,6 @@
 [project]
 name = "opends-cli"
-version = "0.0.0"
+version = "0.1.0"
 description = "A command line client for running opendata.studio dataflows"
 requires-python = ">=3.11"
 authors = [
