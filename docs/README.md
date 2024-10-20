@@ -15,10 +15,10 @@ $ opends [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `get-run`: Get the active run
-* `init`: Initialise a dataflow run
+* `init`: Initialise a datakit run
 * `load`: Load data into configuration variable
-* `new`: Generate a new dataflow and algorithm...
-* `reset`: Reset dataflow to clean state
+* `new`: Generate a new datakit and algorithm scaffold
+* `reset`: Reset datakit to clean state
 * `run`: Execute the active run
 * `set`: Set a variable value
 * `set-run`: Set the active run
@@ -41,7 +41,7 @@ $ opends get-run [OPTIONS]
 
 ## `opends init`
 
-Initialise a dataflow run
+Initialise a datakit run
 
 **Usage**:
 
@@ -78,7 +78,7 @@ $ opends load [OPTIONS] VARIABLE_NAME PATH
 
 ## `opends new`
 
-Generate a new dataflow and algorithm scaffold
+Generate a new datakit and algorithm scaffold
 
 **Usage**:
 
@@ -96,7 +96,7 @@ $ opends new [OPTIONS] ALGORITHM_NAME
 
 ## `opends reset`
 
-Reset dataflow to clean state
+Reset datakit to clean state
 
 Removes all run outputs and resets configurations to default
 

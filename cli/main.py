@@ -15,10 +15,10 @@ from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
-from opendatapy.dataflow import (
+from opendatapy.datakit import (
     ExecutionError,
     ResourceError,
-    execute_dataflow,
+    execute_datakit,
     execute_view,
     init_resource,
     load_resource_by_variable,
@@ -28,8 +28,8 @@ from opendatapy.dataflow import (
     write_run_configuration,
     load_variable,
     load_variable_signature,
-    load_dataflow_configuration,
-    write_dataflow_configuration,
+    load_datakit_configuration,
+    write_datakit_configuration,
     load_algorithm,
     write_algorithm,
     get_algorithm_name,
@@ -46,10 +46,10 @@ app = typer.Typer(no_args_is_help=True)
 client = docker.from_env()
 
 
-# Assume we are always at the dataflow root
-# TODO: Validate we actually are, and that this is a dataflow
-DATAFLOW_PATH = os.getcwd()  # Root dataflow path
-CONFIG_FILE = f"{DATAFLOW_PATH}/.opends"
+# Assume we are always at the datakit root
+# TODO: Validate we actually are, and that this is a datakit
+DATAKIT_PATH = os.getcwd()  # Root datakit path
+CONFIG_FILE = f"{DATAKIT_PATH}/.opends"
 RUN_EXTENSION = ".run"
 
 
@@ -71,10 +71,8 @@ def dumb_str_to_type(value) -> Any:
 
 
 def get_default_algorithm() -> str:
-    """Return the default algorithm for the current dataflow"""
-    return load_dataflow_configuration(base_path=DATAFLOW_PATH)["algorithms"][
-        0
-    ]
+    """Return the default algorithm for the current datakit"""
+    return load_datakit_configuration(base_path=DATAKIT_PATH)["algorithms"][0]
 
 
 def load_config():
@@ -99,7 +97,7 @@ def write_config(run_name):
 
 def run_exists(run_name):
     """Check if specified run exists"""
-    run_dir = RUN_DIR.format(base_path=DATAFLOW_PATH, run_name=run_name)
+    run_dir = RUN_DIR.format(base_path=DATAKIT_PATH, run_name=run_name)
     return os.path.exists(run_dir) and os.path.isdir(run_dir)
 
 
@@ -110,7 +108,7 @@ def get_full_run_name(run_name):
         # [algorithm]
         pattern = re.compile(r"^([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)$")
 
-        algorithms = load_dataflow_configuration()["algorithms"]
+        algorithms = load_datakit_configuration()["algorithms"]
 
         if not pattern.match(run_name) and run_name not in algorithms:
             print(f'[red]"{run_name}" is not a valid run name[/red]')
@@ -120,23 +118,23 @@ def get_full_run_name(run_name):
             )
             print(
                 "[red]Did you forget to add your algorithm to "
-                "dataflow.json?[/red]"
+                "datakit.json?[/red]"
             )
             exit(1)
 
         algorithm_name = get_algorithm_name(run_name)
-        dataflow_algorithms = load_dataflow_configuration(
-            base_path=DATAFLOW_PATH
+        datakit_algorithms = load_datakit_configuration(
+            base_path=DATAKIT_PATH
         )["algorithms"]
 
-        if get_algorithm_name(run_name) not in dataflow_algorithms:
+        if get_algorithm_name(run_name) not in datakit_algorithms:
             print(
-                f'[red]"{algorithm_name}" is not a valid dataflow '
+                f'[red]"{algorithm_name}" is not a valid datakit '
                 "algorithm[/red]"
             )
             print(
-                "[red]Available dataflow algorithms: "
-                f"{dataflow_algorithms}[/red]"
+                "[red]Available datakit algorithms: "
+                f"{datakit_algorithms}[/red]"
             )
             exit(1)
 
@@ -158,7 +156,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
     try:
         with open(
             RELATIONSHIPS_FILE.format(
-                base_path=DATAFLOW_PATH,
+                base_path=DATAKIT_PATH,
                 algorithm_name=get_algorithm_name(run_name),
             ),
             "r",
@@ -186,7 +184,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
             source = load_resource_by_variable(
                 run_name=run_name,
                 variable_name=variable_name,
-                base_path=DATAFLOW_PATH,
+                base_path=DATAKIT_PATH,
                 as_dict=True,
             )
 
@@ -195,7 +193,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                     run_name=run_name,
                     resource_name=target["name"],
                     schema=source["schema"],
-                    base_path=DATAFLOW_PATH,
+                    base_path=DATAKIT_PATH,
                 )
 
         elif rule["type"] == "value":
@@ -205,7 +203,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
             value = load_variable(
                 run_name=run_name,
                 variable_name=variable_name,
-                base_path=DATAFLOW_PATH,
+                base_path=DATAKIT_PATH,
             )["value"]
 
             # If the source variable value matches the rule value, execute
@@ -217,7 +215,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         target_variable = load_variable(
                             run_name=run_name,
                             variable_name=target["name"],
-                            base_path=DATAFLOW_PATH,
+                            base_path=DATAKIT_PATH,
                         )
 
                         target_variable["disabled"] = target["disabled"]
@@ -227,7 +225,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         target_resource = load_resource_by_variable(
                             run_name=run["name"],
                             variable_name=target["name"],
-                            base_path=DATAFLOW_PATH,
+                            base_path=DATAKIT_PATH,
                             as_dict=True,
                         )
 
@@ -248,7 +246,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
                         write_resource(
                             run_name=run["name"],
                             resource=target_resource,
-                            base_path=DATAFLOW_PATH,
+                            base_path=DATAKIT_PATH,
                         )
                     elif target["type"] == "value":
                         # Set target variable value
@@ -287,7 +285,7 @@ def execute_relationship(run_name: str, variable_name: str) -> None:
             raise NotImplementedError("Only value-based rules are implemented")
 
     # Write modified run configuration
-    write_run_configuration(run, base_path=DATAFLOW_PATH)
+    write_run_configuration(run, base_path=DATAKIT_PATH)
 
 
 # Commands
@@ -305,7 +303,7 @@ def init(
         ),
     ] = None,
 ) -> None:
-    """Initialise a dataflow run"""
+    """Initialise a datakit run"""
     run_name = get_full_run_name(run_name)
 
     # Check directory doesn't already exist
@@ -314,13 +312,13 @@ def init(
         exit(1)
 
     # Create run directory
-    run_dir = RUN_DIR.format(base_path=DATAFLOW_PATH, run_name=run_name)
+    run_dir = RUN_DIR.format(base_path=DATAKIT_PATH, run_name=run_name)
     os.makedirs(f"{run_dir}/resources")
     os.makedirs(f"{run_dir}/views")
     print(f"[bold]=>[/bold] Created run directory: {run_dir}")
 
     algorithm_name = get_algorithm_name(run_name)
-    algorithm = load_algorithm(algorithm_name, base_path=DATAFLOW_PATH)
+    algorithm = load_algorithm(algorithm_name, base_path=DATAKIT_PATH)
 
     # Generate default run configuration
     run = {
@@ -352,7 +350,7 @@ def init(
             init_resource(
                 run_name=run["name"],
                 resource_name=resource_name,
-                base_path=DATAFLOW_PATH,
+                base_path=DATAKIT_PATH,
             )
 
             print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
@@ -373,20 +371,20 @@ def init(
             init_resource(
                 run_name=run["name"],
                 resource_name=resource_name,
-                base_path=DATAFLOW_PATH,
+                base_path=DATAKIT_PATH,
             )
 
             print(f"[bold]=>[/bold] Generated input resource: {resource_name}")
 
     # Write generated configuration
-    write_run_configuration(run, base_path=DATAFLOW_PATH)
+    write_run_configuration(run, base_path=DATAKIT_PATH)
 
     print(f"[bold]=>[/bold] Generated default run configuration: {run_name}")
 
-    # Add default run to dataflow.json
-    dataflow = load_dataflow_configuration(base_path=DATAFLOW_PATH)
-    dataflow["runs"].append(run_name)
-    write_dataflow_configuration(dataflow, base_path=DATAFLOW_PATH)
+    # Add default run to datakit.json
+    datakit = load_datakit_configuration(base_path=DATAKIT_PATH)
+    datakit["runs"].append(run_name)
+    write_datakit_configuration(datakit, base_path=DATAKIT_PATH)
 
     # Write current run name to config
     write_config(run_name)
@@ -424,10 +422,10 @@ def run() -> None:
     print(f"[bold]=>[/bold] Executing [bold]{run_name}[/bold]")
 
     try:
-        logs = execute_dataflow(
+        logs = execute_datakit(
             client,
             run_name,
-            base_path=DATAFLOW_PATH,
+            base_path=DATAKIT_PATH,
         )
     except ExecutionError as e:
         print(
@@ -467,7 +465,7 @@ def show(
     signature = load_variable_signature(
         run_name=run_name,
         variable_name=variable_name,
-        base_path=DATAFLOW_PATH,
+        base_path=DATAKIT_PATH,
     )
 
     if signature["type"] == "resource":
@@ -475,7 +473,7 @@ def show(
         resource = load_resource_by_variable(
             run_name=run_name,
             variable_name=variable_name,
-            base_path=DATAFLOW_PATH,
+            base_path=DATAKIT_PATH,
         )
 
         print(
@@ -490,7 +488,7 @@ def show(
         variable = load_variable(
             run_name=run_name,
             variable_name=variable_name,
-            base_path=DATAFLOW_PATH,
+            base_path=DATAKIT_PATH,
         )
 
         print(
@@ -521,7 +519,7 @@ def view(
             docker_client=client,
             run_name=run_name,
             view_name=view_name,
-            base_path=DATAFLOW_PATH,
+            base_path=DATAKIT_PATH,
         )
     except ResourceError as e:
         print("[red]" + e.message + "[/red]")
@@ -555,7 +553,7 @@ def view(
     matplotlib.use("WebAgg")
 
     with open(
-        VIEW_ARTEFACTS_DIR.format(base_path=DATAFLOW_PATH, run_name=run_name)
+        VIEW_ARTEFACTS_DIR.format(base_path=DATAKIT_PATH, run_name=run_name)
         + f"/{view_name}.p",
         "rb",
     ) as f:
@@ -592,7 +590,7 @@ def load(
     resource = load_resource_by_variable(
         run_name=run_name,
         variable_name=variable_name,
-        base_path=DATAFLOW_PATH,
+        base_path=DATAKIT_PATH,
     )
 
     # Read CSV into resource
@@ -601,7 +599,7 @@ def load(
 
     # Write to resource
     write_resource(
-        run_name=run_name, resource=resource, base_path=DATAFLOW_PATH
+        run_name=run_name, resource=resource, base_path=DATAKIT_PATH
     )
 
     # Execute any applicable relationships
@@ -664,7 +662,7 @@ def set(
         resource = load_resource_by_variable(
             run_name=run_name,
             variable_name=variable_name,
-            base_path=DATAFLOW_PATH,
+            base_path=DATAKIT_PATH,
         )
 
         # Check it's a tabular data resource
@@ -704,7 +702,7 @@ def set(
 
         # Write resource
         write_resource(
-            run_name=run_name, resource=resource, base_path=DATAFLOW_PATH
+            run_name=run_name, resource=resource, base_path=DATAKIT_PATH
         )
 
         print(
@@ -719,7 +717,7 @@ def set(
 
         # Load variable signature
         signature = load_variable_signature(
-            run_name, variable_name, base_path=DATAFLOW_PATH
+            run_name, variable_name, base_path=DATAKIT_PATH
         )
 
         # Convenience dict mapping opends types to Python types
@@ -762,7 +760,7 @@ def set(
                 exit(1)
 
         # Load run configuration
-        run = load_run_configuration(run_name, base_path=DATAFLOW_PATH)
+        run = load_run_configuration(run_name, base_path=DATAKIT_PATH)
 
         # Set variable value
         find_by_name(
@@ -770,7 +768,7 @@ def set(
         )["value"] = variable_value
 
         # Write configuration
-        write_run_configuration(run, base_path=DATAFLOW_PATH)
+        write_run_configuration(run, base_path=DATAKIT_PATH)
 
         # Execute any relationships applied to this variable value
         execute_relationship(
@@ -788,20 +786,20 @@ def set(
 
 @app.command()
 def reset():
-    """Reset dataflow to clean state
+    """Reset datakit to clean state
 
     Removes all run outputs and resets configurations to default
     """
     # Remove all run directories
-    for f in os.scandir(DATAFLOW_PATH):
+    for f in os.scandir(DATAKIT_PATH):
         if f.is_dir() and f.path.endswith(".run"):
             print(f"[bold]=>[/bold] Deleting [bold]{f.name}[/bold]")
             shutil.rmtree(f.path)
 
-    # Remove all run references from dataflow.json
-    dataflow = load_dataflow_configuration(base_path=DATAFLOW_PATH)
-    dataflow["runs"] = []
-    write_dataflow_configuration(dataflow, base_path=DATAFLOW_PATH)
+    # Remove all run references from datakit.json
+    datakit = load_datakit_configuration(base_path=DATAKIT_PATH)
+    datakit["runs"] = []
+    write_datakit_configuration(datakit, base_path=DATAKIT_PATH)
 
     # Remove CLI config
     if os.path.exists(CONFIG_FILE):
@@ -818,25 +816,25 @@ def new(
         ),
     ],
 ) -> None:
-    """Generate a new dataflow and algorithm scaffold"""
-    # Create new dataflow directory
-    dataflow_name = f"{algorithm_name}-dataflow"
-    dataflow_dir = f"{DATAFLOW_PATH}/{dataflow_name}"
-    algorithm_dir = f"{dataflow_dir}/{algorithm_name}"
+    """Generate a new datakit and algorithm scaffold"""
+    # Create new datakit directory
+    datakit_name = f"{algorithm_name}-datakit"
+    datakit_dir = f"{DATAKIT_PATH}/{datakit_name}"
+    algorithm_dir = f"{datakit_dir}/{algorithm_name}"
 
-    if not os.path.exists(dataflow_dir):
-        os.makedirs(dataflow_dir)
+    if not os.path.exists(datakit_dir):
+        os.makedirs(datakit_dir)
         os.makedirs(algorithm_dir)
     else:
-        print(f'[red]Directory named "{dataflow_name}" already exists[/red]')
+        print(f'[red]Directory named "{datakit_name}" already exists[/red]')
         exit(1)
 
     current_time = int(time.time())
 
-    dataflow = {
-        "title": "New dataflow",
-        "description": "A new dataflow",
-        "profile": "opends-analysis-dataflow",
+    datakit = {
+        "title": "New datakit",
+        "description": "A new datakit",
+        "profile": "opends-analysis-datakit",
         "algorithms": [algorithm_name],
         "runs": [],
         "repository": {},
@@ -880,12 +878,12 @@ def new(
         "result": x*2,
     }'''
 
-    write_dataflow_configuration(dataflow, base_path=dataflow_dir)
-    write_algorithm(algorithm, base_path=dataflow_dir)
-    with open(f"{dataflow_dir}/{algorithm_name}/algorithm.py", "x") as f:
+    write_datakit_configuration(datakit, base_path=datakit_dir)
+    write_algorithm(algorithm, base_path=datakit_dir)
+    with open(f"{datakit_dir}/{algorithm_name}/algorithm.py", "x") as f:
         f.write(algorithm_code)
 
-    print(f"[bold]=>[/bold] Successfully created [bold]{dataflow_name}[/bold]")
+    print(f"[bold]=>[/bold] Successfully created [bold]{datakit_name}[/bold]")
 
 
 if __name__ == "__main__":
