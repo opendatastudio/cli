@@ -1,8 +1,8 @@
-# opendata.studio CLI
+# opendatakit CLI
 
-A command line client for running opendata.studio datakits.
+A command line client for running datakits.
 
-View usage documentation at [docs/README.md](https://github.com/opendatastudio/cli/blob/main/docs/README.md).
+View usage documentation at [docs/README.md](https://github.com/open-datakit/cli/blob/main/docs/README.md).
 
 
 ## Development
@@ -22,5 +22,5 @@ pip install -e [/path/to/cli]
 
 You can now run the CLI script with:
 ```
-opends
+dk
 ```

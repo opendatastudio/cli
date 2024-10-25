@@ -1,9 +1,9 @@
-# `opends`
+# `dk`
 
 **Usage**:
 
 ```console
-$ opends [OPTIONS] COMMAND [ARGS]...
+$ dk [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Options**:
@@ -25,28 +25,28 @@ $ opends [OPTIONS] COMMAND [ARGS]...
 * `show`: Print a variable value
 * `view`: Render a view locally
 
-## `opends get-run`
+## `dk get-run`
 
 Get the active run
 
 **Usage**:
 
 ```console
-$ opends get-run [OPTIONS]
+$ dk get-run [OPTIONS]
 ```
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opends init`
+## `dk init`
 
 Initialise a datakit run
 
 **Usage**:
 
 ```console
-$ opends init [OPTIONS] [RUN_NAME]
+$ dk init [OPTIONS] [RUN_NAME]
 ```
 
 **Arguments**:
@@ -57,14 +57,14 @@ $ opends init [OPTIONS] [RUN_NAME]
 
 * `--help`: Show this message and exit.
 
-## `opends load`
+## `dk load`
 
 Load data into configuration variable
 
 **Usage**:
 
 ```console
-$ opends load [OPTIONS] VARIABLE_NAME PATH
+$ dk load [OPTIONS] VARIABLE_NAME PATH
 ```
 
 **Arguments**:
@@ -76,14 +76,14 @@ $ opends load [OPTIONS] VARIABLE_NAME PATH
 
 * `--help`: Show this message and exit.
 
-## `opends new`
+## `dk new`
 
 Generate a new datakit and algorithm scaffold
 
 **Usage**:
 
 ```console
-$ opends new [OPTIONS] ALGORITHM_NAME
+$ dk new [OPTIONS] ALGORITHM_NAME
 ```
 
 **Arguments**:
@@ -94,7 +94,7 @@ $ opends new [OPTIONS] ALGORITHM_NAME
 
 * `--help`: Show this message and exit.
 
-## `opends reset`
+## `dk reset`
 
 Reset datakit to clean state
 
@@ -103,35 +103,35 @@ Removes all run outputs and resets configurations to default
 **Usage**:
 
 ```console
-$ opends reset [OPTIONS]
+$ dk reset [OPTIONS]
 ```
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opends run`
+## `dk run`
 
 Execute the active run
 
 **Usage**:
 
 ```console
-$ opends run [OPTIONS]
+$ dk run [OPTIONS]
 ```
 
 **Options**:
 
 * `--help`: Show this message and exit.
 
-## `opends set`
+## `dk set`
 
 Set a variable value
 
 **Usage**:
 
 ```console
-$ opends set [OPTIONS] VARIABLE_REF VARIABLE_VALUE
+$ dk set [OPTIONS] VARIABLE_REF VARIABLE_VALUE
 ```
 
 **Arguments**:
@@ -143,14 +143,14 @@ $ opends set [OPTIONS] VARIABLE_REF VARIABLE_VALUE
 
 * `--help`: Show this message and exit.
 
-## `opends set-run`
+## `dk set-run`
 
 Set the active run
 
 **Usage**:
 
 ```console
-$ opends set-run [OPTIONS] [RUN_NAME]
+$ dk set-run [OPTIONS] [RUN_NAME]
 ```
 
 **Arguments**:
@@ -161,14 +161,14 @@ $ opends set-run [OPTIONS] [RUN_NAME]
 
 * `--help`: Show this message and exit.
 
-## `opends show`
+## `dk show`
 
 Print a variable value
 
 **Usage**:
 
 ```console
-$ opends show [OPTIONS] VARIABLE_NAME
+$ dk show [OPTIONS] VARIABLE_NAME
 ```
 
 **Arguments**:
@@ -179,14 +179,14 @@ $ opends show [OPTIONS] VARIABLE_NAME
 
 * `--help`: Show this message and exit.
 
-## `opends view`
+## `dk view`
 
 Render a view locally
 
 **Usage**:
 
 ```console
-$ opends view [OPTIONS] VIEW_NAME
+$ dk view [OPTIONS] VIEW_NAME
 ```
 
 **Arguments**:

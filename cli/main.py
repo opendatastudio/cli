@@ -15,7 +15,7 @@ from typing_extensions import Annotated
 from rich import print
 from rich.panel import Panel
 from tabulate import tabulate
-from opendatapy.datakit import (
+from datakitpy.datakit import (
     ExecutionError,
     ResourceError,
     execute_datakit,
@@ -37,7 +37,7 @@ from opendatapy.datakit import (
     RELATIONSHIPS_FILE,
     VIEW_ARTEFACTS_DIR,
 )
-from opendatapy.helpers import find_by_name, find
+from datakitpy.helpers import find_by_name, find
 
 
 app = typer.Typer(no_args_is_help=True)
@@ -49,7 +49,7 @@ client = docker.from_env()
 # Assume we are always at the datakit root
 # TODO: Validate we actually are, and that this is a datakit
 DATAKIT_PATH = os.getcwd()  # Root datakit path
-CONFIG_FILE = f"{DATAKIT_PATH}/.opends"
+CONFIG_FILE = f"{DATAKIT_PATH}/.datakit"
 RUN_EXTENSION = ".run"
 
 
@@ -85,7 +85,7 @@ def get_active_run():
     try:
         return load_config()["run"]
     except FileNotFoundError:
-        print('[red]No active run is set. Have you run "opends init"?[/red]')
+        print('[red]No active run is set. Have you run "dk init"?[/red]')
         exit(1)
 
 
@@ -324,7 +324,7 @@ def init(
     run = {
         "name": run_name,
         "title": f"Run configuration for {algorithm_name}",
-        "profile": "opends-run",
+        "profile": "datakit-run",
         "algorithm": f"{algorithm_name}",
         "container": f'{algorithm["container"]}',
         "data": {
@@ -677,7 +677,7 @@ def set(
         if not resource:
             print(
                 f'[red]Parameter resource [bold]{resource.name}[/bold] "data" '
-                'field is empty. Try running "opends reset"?[/red]'
+                'field is empty. Try running "dk reset"?[/red]'
             )
             exit(1)
 
@@ -720,7 +720,7 @@ def set(
             run_name, variable_name, base_path=DATAKIT_PATH
         )
 
-        # Convenience dict mapping opends types to Python types
+        # Convenience dict mapping opendatakit types to Python types
         type_map = {
             "string": [str],
             "boolean": [bool],
@@ -834,7 +834,7 @@ def new(
     datakit = {
         "title": "New datakit",
         "description": "A new datakit",
-        "profile": "opends-analysis-datakit",
+        "profile": "datakit",
         "algorithms": [algorithm_name],
         "runs": [],
         "repository": {},
@@ -845,9 +845,9 @@ def new(
     algorithm = {
         "name": algorithm_name,
         "title": "New algorithm",
-        "profile": "opends-algorithm",
+        "profile": "datakit-algorithm",
         "code": "algorithm.py",
-        "container": "opends/python-run-base:v1",
+        "container": "datakits/python-run-base:latest",
         "signature": {
             "inputs": [
                 {
