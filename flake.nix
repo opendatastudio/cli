@@ -1,5 +1,5 @@
 {
-  description = "Development Flake environment the opendatakit CLI";
+  description = "Development Flake environment the opendata.studio datakit CLI";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/23.11";
 

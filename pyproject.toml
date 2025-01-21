@@ -21,8 +21,8 @@ dependencies = [
 dk = "cli.main:app"
 
 [project.urls]
-"Homepage" = "https://github.com/open-datakit/cli"
-"Bug Tracker" = "https://github.com/open-datakit/cli/issues"
+"Homepage" = "https://github.com/opendatastudio/cli"
+"Bug Tracker" = "https://github.com/opendatastudio/cli/issues"
 
 [project.optional-dependencies]
 development = [

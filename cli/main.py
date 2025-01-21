@@ -720,7 +720,7 @@ def set(
             run_name, variable_name, base_path=DATAKIT_PATH
         )
 
-        # Convenience dict mapping opendatakit types to Python types
+        # Convenience dict mapping datakit types to Python types
         type_map = {
             "string": [str],
             "boolean": [bool],
